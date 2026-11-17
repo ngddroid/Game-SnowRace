@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sounds are looked up by name at runtime; keep them from resource shrinking. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/sfx_*,@raw/music_*,@drawable/ui_*,@drawable/logo_frosty,@drawable/mascot_pip" />

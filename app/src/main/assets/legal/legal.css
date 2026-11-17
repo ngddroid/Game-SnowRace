@@ -1,0 +1,669 @@
+/*
+ * legal.css - shared stylesheet for the in-app legal pages
+ * (assets/legal/terms.html and assets/legal/privacy.html).
+ *
+ * The pages are shown in a WebView with JavaScript disabled and no network,
+ * via loadDataWithBaseURL("file:///android_asset/legal/", ...). Everything
+ * here is local: the display font comes from ../fonts/, and every icon and
+ * pattern is an inline SVG data URI. The only "http" strings in this file are
+ * SVG namespace identifiers (xmlns), which are never fetched.
+ *
+ * This file is not token-processed by the app, so keep the double-brace
+ * tokens out of it.
+ *
+ * Light-only on purpose: the app theme is dark, so a targetSdk 33+ WebView
+ * reports prefers-color-scheme: dark. "only light" keeps the icy design and
+ * opts the page out of algorithmic darkening.
+ */
+
+@font-face {
+  font-family: 'Lilita';
+  src: url('../fonts/LilitaOne-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+:root {
+  --night: #1E1B4B;
+  --indigo: #2E2A7A;
+  --sky: #5EC8FF;
+  --ice: #DFF6FF;
+  --mint: #3DF5C8;
+  --berry: #FF4D8D;
+  --gold: #FFC83D;
+  --navy: #1B2A4A;
+  --muted: #4A5878;
+  --frost: #F1FAFF;
+  --font-display: 'Lilita', 'Arial Rounded MT Bold', -apple-system, Roboto, 'Segoe UI', sans-serif;
+  --font-text: -apple-system, Roboto, 'Segoe UI', sans-serif;
+  color-scheme: light;
+  color-scheme: only light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Page: icy gradient (ice to white) under a repeating snowflake pattern. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  min-height: 100%;
+  background-color: #FFFFFF;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Cdefs%3E%3Cpath id='a' d='M0 0V-9M0-5.4l-2.9-2.7M0-5.4l2.9-2.7'/%3E%3Cg id='f' fill='none' stroke='%235EC8FF' stroke-width='1.6' stroke-linecap='round'%3E%3Cuse href='%23a'/%3E%3Cuse href='%23a' transform='rotate(60)'/%3E%3Cuse href='%23a' transform='rotate(120)'/%3E%3Cuse href='%23a' transform='rotate(180)'/%3E%3Cuse href='%23a' transform='rotate(240)'/%3E%3Cuse href='%23a' transform='rotate(300)'/%3E%3C/g%3E%3C/defs%3E%3Cuse href='%23f' transform='translate(34 38)' opacity='.42'/%3E%3Cuse href='%23f' transform='translate(130 70) scale(.7)' opacity='.34'/%3E%3Cuse href='%23f' transform='translate(78 142) scale(1.15)' opacity='.28'/%3E%3Cuse href='%23f' transform='translate(160 160) scale(.55)' opacity='.38'/%3E%3Cg fill='%235EC8FF' opacity='.3'%3E%3Ccircle cx='98' cy='22' r='2'/%3E%3Ccircle cx='14' cy='104' r='1.6'/%3E%3Ccircle cx='150' cy='118' r='1.8'/%3E%3Ccircle cx='54' cy='88' r='1.3'/%3E%3Ccircle cx='118' cy='168' r='1.4'/%3E%3C/g%3E%3C/svg%3E"),
+    linear-gradient(180deg, #DFF6FF 0, #EDF9FF 520px, #FFFFFF 1150px);
+  background-repeat: repeat, no-repeat;
+  background-size: 180px 180px, 100% 1150px;
+}
+
+body {
+  margin: 0;
+  padding: 16px;
+  font-family: var(--font-text);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--navy);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  -webkit-tap-highlight-color: rgba(94, 200, 255, 0.25);
+}
+
+::selection {
+  background: rgba(94, 200, 255, 0.35);
+}
+
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* ---------- Base text ---------- */
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+p {
+  margin: 0 0 12px;
+}
+
+ul {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+li {
+  position: relative;
+  margin: 0 0 8px;
+  padding-left: 24px;
+}
+
+/* Default bullet: a little sky-blue snowball. */
+li::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: calc(0.8em - 4px);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sky);
+  box-shadow: 0 0 0 3px rgba(94, 200, 255, 0.22);
+}
+
+strong {
+  font-weight: 700;
+  color: var(--night);
+}
+
+/* Keeps short hyphenated terms such as "in-app" on one line. */
+.nowrap {
+  white-space: nowrap;
+}
+
+code {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--ice);
+  color: var(--indigo);
+  font-family: ui-monospace, 'Roboto Mono', 'Droid Sans Mono', monospace;
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
+
+a {
+  color: var(--indigo);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: rgba(46, 42, 122, 0.4);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+
+a:focus-visible {
+  outline: 3px solid var(--sky);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ---------- Hero header card ---------- */
+
+.hero {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "text art"
+    "chips chips";
+  align-items: center;
+  column-gap: 10px;
+  margin: 0 0 18px;
+  padding: 42px 18px 20px 20px;
+  border-radius: 24px;
+  color: #FFFFFF;
+  background-color: var(--indigo);
+  background-image:
+    radial-gradient(72% 56% at 92% 0%, rgba(61, 245, 200, 0.36) 0%, rgba(61, 245, 200, 0) 72%),
+    radial-gradient(58% 62% at 0% 100%, rgba(255, 77, 141, 0.26) 0%, rgba(255, 77, 141, 0) 72%),
+    linear-gradient(160deg, #1E1B4B 0%, #2E2A7A 48%, #5EC8FF 100%);
+  box-shadow: 0 14px 30px rgba(30, 27, 75, 0.26), 0 3px 0 rgba(30, 27, 75, 0.1);
+}
+
+/* Fluffy snow cap along the top edge: a solid band plus two rows of puffs
+   with different spacing, so the edge looks lumpy rather than regular. */
+.hero::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 26px;
+  pointer-events: none;
+  background:
+    linear-gradient(#FFFFFF, #FFFFFF) 0 0 / 100% 9px no-repeat,
+    radial-gradient(circle at 17px 8px, #FFFFFF 0, #FFFFFF 8.5px, #E3F5FF 11.5px, rgba(227, 245, 255, 0) 12px) 0 0 / 34px 26px repeat-x,
+    radial-gradient(circle at 11px 7px, #FFFFFF 0, #FFFFFF 5.5px, #E3F5FF 7.6px, rgba(227, 245, 255, 0) 8px) 6px 0 / 22px 26px repeat-x;
+  filter: drop-shadow(0 3px 0 rgba(30, 27, 75, 0.2));
+}
+
+/* Gentle snowfall behind the hero content. Each tile is exactly one hero
+   tall (50% of this 200%-tall layer), so moving by 50% loops seamlessly. */
+.hero::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -100%;
+  left: 0;
+  right: 0;
+  height: 200%;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at 18px 12%, rgba(255, 255, 255, 0.55) 0, rgba(255, 255, 255, 0.55) 1.5px, rgba(255, 255, 255, 0) 2.3px),
+    radial-gradient(circle at 64px 31%, rgba(255, 255, 255, 0.4) 0, rgba(255, 255, 255, 0.4) 1.2px, rgba(255, 255, 255, 0) 2px),
+    radial-gradient(circle at 40px 52%, rgba(255, 255, 255, 0.48) 0, rgba(255, 255, 255, 0.48) 1.8px, rgba(255, 255, 255, 0) 2.6px),
+    radial-gradient(circle at 90px 70%, rgba(255, 255, 255, 0.38) 0, rgba(255, 255, 255, 0.38) 1.4px, rgba(255, 255, 255, 0) 2.2px),
+    radial-gradient(circle at 30px 88%, rgba(255, 255, 255, 0.48) 0, rgba(255, 255, 255, 0.48) 1.6px, rgba(255, 255, 255, 0) 2.4px);
+  background-size: 97px 50%, 131px 50%, 173px 50%, 149px 50%, 113px 50%;
+  animation: hero-snow 22s linear infinite;
+  will-change: transform;
+}
+
+@keyframes hero-snow {
+  from { transform: translateY(0); }
+  to { transform: translateY(50%); }
+}
+
+.hero__text {
+  grid-area: text;
+  min-width: 0;
+}
+
+.hero__kicker {
+  margin: 0 0 6px;
+  color: var(--mint);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.hero__title {
+  color: #FFFFFF;
+  font-size: 32px;
+  font-size: clamp(30px, 8.6vw, 46px);
+  line-height: 1.05;
+  text-shadow: 0 3px 0 rgba(20, 16, 70, 0.55), 0 8px 20px rgba(10, 8, 50, 0.35);
+}
+
+.hero__lead {
+  margin: 10px 0 0;
+  color: #E4F2FF;
+  font-size: 15px;
+  line-height: 1.45;
+  text-shadow: 0 1px 3px rgba(20, 16, 70, 0.45);
+}
+
+.hero__art {
+  grid-area: art;
+  width: 104px;
+  width: clamp(92px, 29vw, 150px);
+}
+
+.hero__art svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Mascot idle bob (the SVG group is styled from here). */
+.pal {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: pal-bob 3.6s ease-in-out infinite;
+}
+
+@keyframes pal-bob {
+  0%, 100% { transform: translateY(0) scale(1, 1); }
+  50% { transform: translateY(-2px) scale(0.985, 1.025); }
+}
+
+.hero__chips {
+  grid-area: chips;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 0;
+}
+
+/* ---------- Chips ---------- */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 5px 12px 5px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--navy);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  box-shadow: 0 3px 0 rgba(30, 27, 75, 0.22);
+  overflow-wrap: anywhere;
+}
+
+.chip::before {
+  content: "";
+  flex: none;
+  width: 16px;
+  height: 16px;
+  background: center / contain no-repeat;
+}
+
+.chip__k {
+  flex: none;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.chip--date::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232E2A7A' stroke-width='2.2' stroke-linecap='round'%3E%3Crect x='3.5' y='5' width='17' height='15.5' rx='3.5'/%3E%3Cpath d='M3.5 10.2h17M8.2 3v4M15.8 3v4'/%3E%3C/svg%3E");
+}
+
+.chip--ver::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232E2A7A' stroke-width='2.2' stroke-linejoin='round'%3E%3Cpath d='M3.5 12.3V5A1.5 1.5 0 0 1 5 3.5h7.3l8.4 8.4a1.5 1.5 0 0 1 0 2.1l-6.9 6.9a1.5 1.5 0 0 1-2.1 0z'/%3E%3Ccircle cx='8.3' cy='8.3' r='1.7' fill='%232E2A7A' stroke='none'/%3E%3C/svg%3E");
+}
+
+/* ---------- TL;DR summary card ---------- */
+
+.tldr {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  margin: 0 0 18px;
+  padding: 18px 18px 12px;
+  border: 2px solid var(--mint);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #E9FFF8 0%, #FFFFFF 75%);
+  box-shadow: 0 5px 0 rgba(31, 211, 166, 0.35), 0 12px 26px rgba(61, 245, 200, 0.18);
+}
+
+.tldr::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -14px;
+  right: -14px;
+  width: 96px;
+  height: 96px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-12 -12 24 24'%3E%3Cdefs%3E%3Cpath id='a' d='M0 0V-10.5M0-6.2l-3.4-3.1M0-6.2l3.4-3.1'/%3E%3C/defs%3E%3Cg fill='none' stroke='%231FD3A6' stroke-width='1.5' stroke-linecap='round'%3E%3Cuse href='%23a'/%3E%3Cuse href='%23a' transform='rotate(60)'/%3E%3Cuse href='%23a' transform='rotate(120)'/%3E%3Cuse href='%23a' transform='rotate(180)'/%3E%3Cuse href='%23a' transform='rotate(240)'/%3E%3Cuse href='%23a' transform='rotate(300)'/%3E%3C/g%3E%3C/svg%3E") center / contain no-repeat;
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.tldr__tag {
+  display: inline-block;
+  margin: 0;
+  padding: 3px 12px 1px;
+  border-radius: 999px;
+  background: var(--mint);
+  color: var(--night);
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  box-shadow: 0 2px 0 rgba(17, 168, 131, 0.55);
+}
+
+.tldr h2 {
+  margin: 10px 0 8px;
+  color: var(--night);
+  font-size: 26px;
+  line-height: 1.15;
+}
+
+.fine {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Check-mark and cross bullets. */
+.checks > li,
+.crosses > li {
+  margin-bottom: 10px;
+  padding-left: 34px;
+}
+
+.checks > li::before,
+.crosses > li::before {
+  left: 0;
+  top: calc(0.8em - 11px);
+  width: 22px;
+  height: 22px;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.12);
+}
+
+.checks > li::before {
+  background: var(--mint) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6.2 12.6l3.7 3.7 7.9-8.4' fill='none' stroke='%231B2A4A' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px 14px no-repeat;
+}
+
+.crosses > li::before {
+  background: var(--berry) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M8 8l8 8M16 8l-8 8' fill='none' stroke='%23FFFFFF' stroke-width='3.2' stroke-linecap='round'/%3E%3C/svg%3E") center / 12px 12px no-repeat;
+}
+
+/* ---------- Section cards ---------- */
+
+.card {
+  margin: 0 0 16px;
+  padding: 18px 18px 8px;
+  border: 1px solid rgba(94, 200, 255, 0.28);
+  border-radius: 18px;
+  background: #FFFFFF;
+  box-shadow: 0 2px 4px rgba(46, 42, 122, 0.05), 0 10px 26px rgba(94, 200, 255, 0.22);
+}
+
+.card > h2 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+  color: var(--night);
+  font-size: 21px;
+  line-height: 1.2;
+}
+
+/* Circular berry-pink number badge. Sized in em so it grows with text zoom. */
+.num {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2em;
+  height: 2em;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%, #FF86B0 0%, #FF4D8D 55%, #E5306F 100%);
+  color: #FFFFFF;
+  font-size: 17px;
+  line-height: 1;
+  text-shadow: 0 1px 0 rgba(120, 0, 40, 0.35);
+  box-shadow: inset 0 -3px 0 rgba(120, 0, 40, 0.22), 0 3px 0 rgba(229, 48, 111, 0.3);
+}
+
+/* ---------- Callout notes ---------- */
+
+.note {
+  margin: 4px 0 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(94, 200, 255, 0.45);
+  border-radius: 14px;
+  background: var(--frost);
+}
+
+.note > :last-child {
+  margin-bottom: 0;
+}
+
+.note__title {
+  margin: 0 0 4px;
+  color: var(--night);
+  font-family: var(--font-display);
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.note--gold {
+  border-color: rgba(255, 200, 61, 0.85);
+  background: #FFF8E2;
+}
+
+.note--mint {
+  border-color: rgba(61, 245, 200, 0.85);
+  background: #EBFFF8;
+}
+
+/* ---------- Icon tiles ---------- */
+
+.tiles {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.tile {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0 0 14px;
+  padding: 12px;
+  border: 1px solid rgba(94, 200, 255, 0.35);
+  border-radius: 14px;
+  background: var(--frost);
+}
+
+.tiles > .tile {
+  margin: 0;
+}
+
+.tile::before {
+  content: "";
+  position: static;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: #FFFFFF center / 26px 26px no-repeat;
+  box-shadow: 0 2px 0 rgba(94, 200, 255, 0.35);
+}
+
+.tile__body {
+  min-width: 0;
+  margin: 0;
+}
+
+.tile__title {
+  display: block;
+  margin: 0 0 2px;
+  color: var(--night);
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+.tile--star::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2.6l2.9 5.9 6.5.9-4.7 4.6 1.1 6.4L12 17.4l-5.8 3 1.1-6.4-4.7-4.6 6.5-.9z' fill='%23FFC83D' stroke='%23D99A00' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+.tile--coin::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='9' fill='%23FFC83D' stroke='%23D99A00' stroke-width='1.8'/%3E%3Ccircle cx='12' cy='12' r='5.2' fill='none' stroke='%23FFE9A8' stroke-width='1.8'/%3E%3Cpath d='M12 9.2v5.6' stroke='%23D99A00' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+.tile--sliders::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke-linecap='round'%3E%3Cpath d='M4 6.5h16M4 12h16M4 17.5h16' stroke='%23B9D9F0' stroke-width='2.2'/%3E%3Ccircle cx='9' cy='6.5' r='2.5' fill='%235EC8FF' stroke='%232E2A7A' stroke-width='1.8'/%3E%3Ccircle cx='15.5' cy='12' r='2.5' fill='%233DF5C8' stroke='%232E2A7A' stroke-width='1.8'/%3E%3Ccircle cx='8' cy='17.5' r='2.5' fill='%23FF4D8D' stroke='%232E2A7A' stroke-width='1.8'/%3E%3C/svg%3E");
+}
+
+.tile--name::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='2.5' y='5' width='19' height='14' rx='3.5' fill='%23FF4D8D'/%3E%3Crect x='5' y='10' width='14' height='6.4' rx='1.8' fill='%23FFFFFF'/%3E%3Cpath d='M7.6 13.2h8.8' stroke='%231B2A4A' stroke-width='1.6' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='7.5' r='1' fill='%23FFFFFF'/%3E%3C/svg%3E");
+}
+
+.tile--vibrate::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232E2A7A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='8' y='3.5' width='8' height='17' rx='2'/%3E%3Cpath d='M11 17.2h2M4.6 8.5l-1.6 1.7 1.6 1.8-1.6 1.8 1.6 1.7M19.4 8.5l1.6 1.7-1.6 1.8 1.6 1.8-1.6 1.7'/%3E%3C/svg%3E");
+}
+
+/* ---------- Contact button ---------- */
+
+.contact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin: 6px 0 14px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  min-height: 48px;
+  padding: 11px 18px 11px 14px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #3B36A0 0%, #2E2A7A 100%);
+  color: #FFFFFF;
+  font-weight: 700;
+  line-height: 1.3;
+  text-decoration: none;
+  box-shadow: 0 4px 0 var(--night), 0 10px 20px rgba(46, 42, 122, 0.25);
+  overflow-wrap: anywhere;
+}
+
+.btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--night), 0 4px 10px rgba(46, 42, 122, 0.25);
+}
+
+.btn::before,
+.chip--mail::before {
+  content: "";
+  flex: none;
+  width: 22px;
+  height: 22px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FFFFFF' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5.5' width='18' height='13' rx='3'/%3E%3Cpath d='M4.8 8l7.2 5.4L19.2 8'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* ---------- Footer ---------- */
+
+.foot {
+  margin: 26px 0 4px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.foot p {
+  margin: 0 0 10px;
+}
+
+.flake {
+  display: inline-block;
+  color: var(--sky);
+  font-size: 1.25em;
+  line-height: 1;
+  vertical-align: -0.1em;
+}
+
+.chip--mail {
+  padding: 7px 14px 7px 11px;
+  background: var(--indigo);
+  color: #FFFFFF;
+  text-decoration: none;
+  box-shadow: 0 3px 0 var(--night);
+}
+
+.chip--mail::before {
+  width: 18px;
+  height: 18px;
+}
+
+/* ---------- Screen sizes ---------- */
+
+/* Very narrow phones: keep the app-name kicker on one line next to the mascot. */
+@media (max-width: 359px) {
+  .hero__kicker {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+  }
+}
+
+@media (min-width: 540px) {
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 600px) {
+  .hero {
+    column-gap: 18px;
+    padding: 48px 28px 24px 30px;
+  }
+
+  .tldr {
+    padding: 22px 24px 14px;
+  }
+
+  .card {
+    padding: 22px 24px 10px;
+  }
+
+  .card > h2 {
+    font-size: 23px;
+  }
+}
+
+/* ---------- Motion preferences ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .hero::after,
+  .pal {
+    animation: none;
+  }
+}

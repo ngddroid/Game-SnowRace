@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="night_indigo">#FF1E1B4B</color>
+    <color name="deep_indigo">#FF2E2A7A</color>
+    <color name="sky_blue">#FF5EC8FF</color>
+    <color name="ice">#FFDFF6FF</color>
+    <color name="aurora_mint">#FF3DF5C8</color>
+    <color name="berry_pink">#FFFF4D8D</color>
+    <color name="gold">#FFFFC83D</color>
+    <color name="navy">#FF1B2A4A</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="black">#FF000000</color>
+</resources>

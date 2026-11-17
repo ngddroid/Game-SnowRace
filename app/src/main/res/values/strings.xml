@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Frosty Roll Rally</string>
+
+    <!-- Legal page tokens: fill these in before publishing. -->
+    <string name="legal_studio_name" translatable="false">NG Studio</string>
+    <string name="legal_contact_email" translatable="false">support@example.com</string>
+    <string name="legal_effective_date" translatable="false">November 14, 2026</string>
+</resources>
