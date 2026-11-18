@@ -41,12 +41,13 @@ float shadowAt(vec4 ls) {
 vec3 shade(vec3 base, vec3 N, highp vec3 W, vec4 ls, float gloss) {
     float ndl = dot(N, uSunDir);
     float sh = shadowAt(ls);
-    float lit = smoothstep(-0.04, 0.22, ndl) * sh;
+    // Wide, soft terminator (clean "crystal" look): shadows stay pale and readable.
+    float lit = smoothstep(-0.22, 0.6, ndl) * sh;
     vec3 amb = mix(uAmbGround, uAmbSky, N.y * 0.5 + 0.5);
     vec3 c = base * (amb + uSunColor * lit);
     vec3 V = normalize(uCamPosF - W);
     float rim = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 3.0);
-    c += uRim * rim * (0.3 + 0.7 * sh) * 0.55;
+    c += uRim * rim * (0.4 + 0.6 * sh) * 0.18;
     if (gloss > 0.0) {
         vec3 H = normalize(uSunDir + V);
         c += uSunColor * pow(max(dot(N, H), 0.0), 48.0) * gloss * sh;
@@ -203,22 +204,11 @@ void main() {
     vec3 N = normalize(vNormal);
     float fresh = smoothstep(0.12, 0.8, vDepth);
     vec3 base = mix(uSnowPacked, uSnowColor, fresh);
-    float n1 = vnoise(vWorld.xz * 0.28);
-    float n2 = vnoise(vWorld.xz * 1.35 + 7.0);
-    float ripple = sin(vWorld.x * 2.1 + vWorld.z * 0.7 + n1 * 5.0) * 0.5 + 0.5;
-    base *= 0.91 + n1 * 0.07 + n2 * 0.035 + ripple * 0.02 * fresh;
-    base = mix(base, base * vec3(0.9, 0.95, 1.06), (1.0 - n1) * 0.35);
-    base += vec3(0.04) * smoothstep(1.0, 1.35, vDepth);
+    // clean, bright snow: walls and grooves read through lighting only
+    base += vec3(0.03) * smoothstep(1.0, 1.35, vDepth);
     vec3 col = shade(base, N, vWorld, vLight, 0.0);
-    vec3 V = normalize(uCamPosF - vWorld);
-    highp vec2 g = vWorld.xz * 22.0;
-    highp vec2 cell = floor(g);
-    highp float h = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);
-    vec2 f = vec2(fract(g)) - 0.5;
-    float dotMask = 1.0 - smoothstep(0.06, 0.2, length(f));
-    highp float dist = distance(vWorld, uCamPosF);
-    float glint = step(0.972, h) * dotMask * pow(max(dot(reflect(-uSunDir, N), V), 0.0), 4.0) * (1.0 - smoothstep(16.0, 38.0, dist));
-    col += vec3(glint) * 1.6 * uSparkle * (0.35 + 0.65 * fresh);
+    // trail walls take a cool blue tint, like packed snow catching the sky
+    col *= mix(vec3(0.76, 0.85, 1.0), vec3(1.0), smoothstep(0.55, 0.97, N.y));
     frag = vec4(finish(col, vWorld), 1.0);
 }
 """
@@ -249,6 +239,7 @@ uniform vec3 uSkyRefl;
 uniform sampler2D uLand;
 uniform vec4 uLandRect;
 out vec4 frag;
+uniform sampler2D uCaustics;
 void main() {
     highp vec2 p = vWorld.xz;
     highp float t = uTime;
@@ -262,15 +253,19 @@ void main() {
     float land = 0.0;
     if (muv.x > 0.0 && muv.x < 1.0 && muv.y > 0.0 && muv.y < 1.0) land = texture(uLand, muv).r;
     vec3 base = mix(uDeep, uShallow, smoothstep(0.02, 0.55, land));
+    // caustic cell lines (Worley F2-F1): the clear "crystal" water pattern
+    float caus = texture(uCaustics, p * 0.069 + vec2(t * 0.011, t * 0.006)).r;
+    float caus2 = texture(uCaustics, p * 0.143 + vec2(-t * 0.008, t * 0.013) + vec2(0.37, 0.71)).r;
     float sh = shadowAt(vLight);
-    vec3 col = base * (0.62 + 0.38 * sh) + uSunColor * 0.08;
-    col = mix(col, uSkyRefl, fres * 0.55);
+    vec3 col = base * (0.82 + 0.18 * sh);
+    col = mix(col, mix(col, vec3(0.86, 0.95, 1.0), 0.55), caus * 0.75 + caus2 * 0.25);
+    col = mix(col, uSkyRefl, fres * 0.25);
     vec3 H = normalize(uSunDir + V);
-    col += uSunColor * pow(max(dot(N, H), 0.0), 140.0) * 1.6 * sh;
+    col += uSunColor * pow(max(dot(N, H), 0.0), 160.0) * 1.2 * sh;
     float band = smoothstep(0.28, 0.5, land) * (1.0 - smoothstep(0.82, 0.97, land));
     float ripple = sin(land * 34.0 - t * 2.6 + (p.x + p.y) * 0.35) * 0.5 + 0.5;
     float foam = band * (0.45 + 0.55 * ripple);
-    col = mix(col, vec3(0.97, 0.99, 1.0), clamp(foam, 0.0, 1.0) * 0.9);
+    col = mix(col, vec3(0.98, 1.0, 1.0), clamp(foam, 0.0, 1.0) * 0.9);
     frag = vec4(finish(col, vWorld), 1.0);
 }
 """
@@ -418,13 +413,14 @@ void main() {
         base = mix(uBase, uAccent, s);
         gloss = 0.5;
     } else {                        // PLAIN snow with sparkle
-        highp float h = hash3(floor(o * 30.0));
-        base = uBase * (0.95 + 0.05 * h);
-        gloss = 0.15;
-        vec3 V = normalize(uCamPosF - vWorld);
-        emis = step(0.975, h) * pow(max(dot(reflect(-uSunDir, N), V), 0.0), 4.0) * 0.8;
+        base = uBase;
+        gloss = 0.08;
     }
     vec3 col = shade(base, N, vWorld, vLight, gloss);
+    // form shading + contact occlusion so a white ball pops against white snow
+    float ndl2 = dot(N, uSunDir);
+    col *= mix(vec3(0.78, 0.85, 0.97), vec3(1.0), smoothstep(-0.45, 0.75, ndl2));
+    col *= mix(0.88, 1.0, smoothstep(-0.7, 0.1, N.y));
     col += base * uGlow * 0.6 + vec3(emis) * mix(vec3(1.0), uAccent, 0.4);
     frag = vec4(finish(col, vWorld), 1.0);
 }

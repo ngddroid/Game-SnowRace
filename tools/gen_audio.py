@@ -1259,6 +1259,57 @@ def sfx_finale_step():
     return finish_sfx(out, 0.002, 0.04)
 
 
+def sfx_bonk_heavy():
+    """Big knock-out hit: deep body thud, crunchy snow burst and a low rubbery boing."""
+    rng = rng_for('sfx_bonk_heavy')
+    n = ns(0.62)
+    out = zeros(n)
+    add_at(out, thump(0.42, 120.0, 42.0, 0.05, 0.14), 0, 1.0)                  # chest-thump body
+    add_at(out, modal(520.0, 0.16, [(1, 1.0, 0.04), (2.3, 0.5, 0.02), (3.7, 0.25, 0.01)]), 0, 0.5)
+    m = ns(0.22)
+    crunch = svf(vmul(white(m, rng), env_exp(m, 0.05)), 1400.0, 0.9, 'bp')
+    add_at(out, end_fade(crunch), 0, 0.55)                                     # snow burst
+    freqs = glide(ns(0.45), 380.0, 95.0, 0.07)
+    env = env_ad(len(freqs), 0.003, 0.16)
+    boing = end_fade([e * (sin(ph) + 0.35 * sin(2.0 * ph)) for ph, e in zip(phases(freqs), env)])
+    add_at(out, boing, ns(0.015), 0.6)
+    return finish_sfx(out, 0.002, 0.08)
+
+
+def sfx_bridge_done():
+    """Bridge crossed: bright rising glockenspiel triad with a sparkle tail."""
+    rng = rng_for('sfx_bridge_done')
+    n = ns(0.85)
+    out = zeros(n)
+    for k, m in enumerate((79, 84, 88, 91)):           # G5 C6 E6 G6
+        last = k == 3
+        add_at(out, chime(hz(m), 0.6 if last else 0.3, 0.9 if last else 0.5), ns(0.07 * k), 0.5)
+        add_at(out, fm_bell(hz(m - 12), 0.4, 1.0, 0.7, 0.06, 0.1, tau=0.2), ns(0.07 * k), 0.18)
+    twinkles(out, rng, 8, 0.22, 0.75, 3000.0, 7000.0, amp=0.1, tau=0.03)
+    return finish_sfx(out, 0.002, 0.15)
+
+
+def sfx_finale_max():
+    """Top step (x5): rising brass flourish into a big major chord, timpani, crash and bell shower."""
+    rng = rng_for('sfx_finale_max')
+    n = ns(2.2)
+    out = zeros(n)
+    for k, m in enumerate((72, 76, 79, 84)):                                  # quick C-E-G-C run
+        add_at(out, brass(hz(m), 0.09, 0.06, 1.1, rng=rng), ns(0.07 * k), 0.26)
+    for m in (72, 76, 79, 84, 88):                                            # held C-major chord
+        add_at(out, brass(hz(m), 0.95, 0.22, 1.1, vib=0.006, rng=rng), ns(0.30), 0.2)
+    add_at(out, brass(hz(48), 0.95, 0.2, 0.5, rng=rng), ns(0.30), 0.24)        # bass
+    for t, lvl in ((0.0, 0.25), (0.30, 0.5)):
+        add_at(out, thump(0.55, 150.0, 70.0, 0.05, 0.18), ns(t), lvl)
+    cn = ns(1.6)
+    crash = vmul(filt(white(cn, rng), 'hp', 4000.0), env_ad(cn, 0.003, 0.6))
+    add_at(out, end_fade(crash), ns(0.30), 0.26)
+    for k, m in enumerate((91, 96, 100, 103, 108)):                           # bell shower
+        add_at(out, chime(hz(m), 0.9, 1.0), ns(0.36 + 0.06 * k), 0.17)
+    twinkles(out, rng, 18, 0.4, 1.9, 2500.0, 7000.0, 0.09, 0.05)
+    return finish_sfx(out, 0.002, 0.35)
+
+
 # ============================================================================
 # MUSIC -- instruments (each renders one note; Voice caches identical notes)
 # ============================================================================
@@ -1870,6 +1921,9 @@ SOUNDS = [
     ('sfx_pop', sfx_pop, 'sfx', 0.08, 'Bubble pop.'),
     ('sfx_ice_crack', sfx_ice_crack, 'sfx', 0.40, 'Sharp ice crack with follow-up cracks, icy ring and a frozen-lake "pew".'),
     ('sfx_finale_step', sfx_finale_step, 'sfx', 0.25, 'Bright marimba C5 note (game pitches it up per stair step).'),
+    ('sfx_bonk_heavy', sfx_bonk_heavy, 'sfx', 0.60, 'Knock-out hit: deep thud, snow crunch burst and a low rubbery boing.'),
+    ('sfx_bridge_done', sfx_bridge_done, 'sfx', 0.85, 'Bridge crossed: rising G-major glockenspiel arpeggio with sparkles.'),
+    ('sfx_finale_max', sfx_finale_max, 'sfx', 2.20, 'Top finale step (x5): brass flourish into a held C-major chord, timpani, crash, bell shower.'),
     ('music_menu', music_menu, 'music', 38.4, 'Cozy winter theme, F major, 100 bpm, 16 bars: celesta lead, Karplus-Strong harp arpeggios, soft pad, sine bass, shaker, sleigh bells.'),
     ('music_race', music_race, 'music', 27.43, 'Upbeat race theme, G major, 140 bpm, 16 bars: plucky lead hook, glockenspiel double, driving bass, four-on-the-floor kit, offbeat stabs, sleigh bells.'),
     ('music_boss', music_boss, 'music', 25.6, 'Tense-but-fun chase, E minor, 150 bpm, 16 bars: staccato saw-string stabs, galloping bass, minor riff, tom fills, sleigh bells.'),

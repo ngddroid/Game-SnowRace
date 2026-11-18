@@ -64,6 +64,8 @@ class Racer(
     var respawnX = 0f
     var finaleStep = 0
     var finaleDone = false
+    /** Finale climb over and the racer has walked up onto the last step it paid for. */
+    var finalePosed = false
     var celebrateX = 0f
     var celebrateZ = 0f
     var lastBonker = -1

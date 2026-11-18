@@ -384,3 +384,29 @@ fun GameBackground(modifier: Modifier = Modifier, content: @Composable BoxScope.
         content()
     }
 }
+
+// ---------------------------------------------------------------------------------- studio credit
+/** "PRESENTED BY" caption over the NG Studio logo (splash and settings), same as the other NG Studio games. */
+@Composable
+fun StudioCredit(modifier: Modifier = Modifier, logoWidth: Dp = 108.dp, inline: Boolean = false) {
+    val logo = @Composable {
+        Image(
+            painterResource(com.ngstudio.snowrace.R.drawable.ng_studio_logo),
+            contentDescription = "NG Studio",
+            modifier = Modifier.size(logoWidth, logoWidth * 2 / 3),
+            contentScale = ContentScale.Fit,
+        )
+    }
+    if (inline) {
+        Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+            OutlinedText("PRESENTED BY", style = Type.Small.copy(fontSize = 11.sp), outlineWidth = 2.dp)
+            Spacer(Modifier.width(6.dp))
+            logo()
+        }
+    } else {
+        Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+            OutlinedText("PRESENTED BY", style = Type.Small.copy(fontSize = 11.sp), outlineWidth = 2.dp)
+            logo()
+        }
+    }
+}

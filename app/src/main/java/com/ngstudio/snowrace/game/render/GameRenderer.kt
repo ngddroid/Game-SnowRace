@@ -19,6 +19,7 @@ import com.ngstudio.snowrace.level.TimeOfDay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import java.util.concurrent.ConcurrentLinkedQueue
 import javax.microedition.khronos.egl.EGL10
 import javax.microedition.khronos.egl.EGLConfig
@@ -52,6 +53,19 @@ class GameRenderer(
     private var fpsClock = 0L
     private var fpsSeq = 0
     private var worstFrameNs = 0L
+    /** Frames that took longer than 1.5 vsyncs (a visible hitch), per second and since the last scene build. */
+    private var jank = 0
+    private var jankScene = 0
+    /** Frame log: always on in debug; on release with `adb shell setprop log.tag.FrostyFps DEBUG`. */
+    private val perfLog = com.ngstudio.snowrace.BuildConfig.DEBUG || Log.isLoggable("FrostyFps", Log.DEBUG)
+    private var worstCmdNs = 0L
+    private var worstUpdNs = 0L
+    private var worstRenNs = 0L
+
+    /** Scene builds queued, running, or waiting for their first frame; the UI keeps the loading cover up while > 0. */
+    private val _building = MutableStateFlow(0)
+    val building: StateFlow<Int> = _building.asStateFlow()
+    private var builtAwaitingFrame = 0 // GL thread only
 
     private val _ready = MutableStateFlow(false)
     val ready: StateFlow<Boolean> = _ready.asStateFlow()
@@ -64,19 +78,29 @@ class GameRenderer(
 
     fun show(s: SceneSpec) {
         spec = s
-        commands.add { buildScene() }
+        _building.update { it + 1 }
+        commands.add { buildScene(); builtAwaitingFrame++; jankScene = 0 }
     }
 
     /** Updates the menu diorama without rebuilding it when possible. */
     fun updateMenu(s: SceneSpec.Menu) {
         val prev = spec
         spec = s
+        // decided here (not on the GL thread) so [building] is raised before the caller starts waiting on it
+        val rebuild = !(prev is SceneSpec.Menu && prev.biome == s.biome && prev.time == s.time)
+        if (rebuild) _building.update { it + 1 }
         commands.add {
             val sc = scene
-            if (sc is MenuScene && prev is SceneSpec.Menu && prev.biome == s.biome && prev.time == s.time) {
+            if (!rebuild && sc is MenuScene) {
                 sc.look = s.look; sc.ball = s.ball; sc.trail = s.trail; sc.mode = s.mode
             } else buildScene()
+            if (rebuild) builtAwaitingFrame++
         }
+    }
+
+    /** Lowers [building] once the new scene has been drawn (or failed to build). */
+    private fun settleBuilds() {
+        if (builtAwaitingFrame > 0) { val n = builtAwaitingFrame; builtAwaitingFrame = 0; _building.update { it - n } }
     }
 
     fun menuDrag(dYaw: Float) { commands.add { (scene as? MenuScene)?.let { it.dragYaw += dYaw } } }
@@ -106,12 +130,19 @@ class GameRenderer(
             3 -> QualityTier.HIGH
             else -> autoTier(gpuName)
         }
-        Log.i("GameRenderer", "GPU=$gpuName tier=$tier")
+        val samples = IntArray(1)
+        GLES30.glGetIntegerv(GLES30.GL_SAMPLES, samples, 0)
+        Log.i("GameRenderer", "GPU=$gpuName tier=$tier msaa=${samples[0]}")
+        com.ngstudio.snowrace.analytics.Telemetry.key("gpu", gpuName)
+        com.ngstudio.snowrace.analytics.Telemetry.key("tier", tier.name)
         res = try { RenderResources(context, tier) } catch (t: Throwable) {
             Log.e("GameRenderer", "Resource init failed at $tier, falling back to LOW", t)
+            com.ngstudio.snowrace.analytics.Telemetry.nonFatal(t)
             tier = QualityTier.LOW
             RenderResources(context, QualityTier.LOW)
         }
+        // every prop mesh is built now, behind the studio intro, so no level load pays for it later
+        try { res?.prewarm() } catch (t: Throwable) { Log.e("GameRenderer", "Prewarm failed", t) }
         scene = null
         buildScene()
         last = SystemClock.elapsedRealtimeNanos()
@@ -124,9 +155,14 @@ class GameRenderer(
     }
 
     override fun onDrawFrame(gl: GL10?) {
+        val c0 = SystemClock.elapsedRealtimeNanos()
         while (true) { val c = commands.poll() ?: break; c() }
+        val cmd = SystemClock.elapsedRealtimeNanos() - c0
+        if (cmd > worstCmdNs) worstCmdNs = cmd
         val now = SystemClock.elapsedRealtimeNanos()
         if (now - last > worstFrameNs) worstFrameNs = now - last
+        // build frames are hidden behind the loading cover, so they are not counted as hitches
+        if (now - last > 25_000_000L && cmd < 5_000_000L) { jank++; jankScene++ }
         val dt = ((now - last) / 1e9f).coerceIn(0f, 0.05f)
         last = now
         val r = res
@@ -135,21 +171,31 @@ class GameRenderer(
             GLES30.glClearColor(0.118f, 0.106f, 0.294f, 1f)
             GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT or GLES30.GL_DEPTH_BUFFER_BIT)
             if (r != null && spec is SceneSpec.None) _ready.value = true
+            settleBuilds()
             return
         }
         try {
+            val u0 = SystemClock.elapsedRealtimeNanos()
             s.update(dt)
+            val u1 = SystemClock.elapsedRealtimeNanos()
             s.render()
+            val u2 = SystemClock.elapsedRealtimeNanos()
+            if (u1 - u0 > worstUpdNs) worstUpdNs = u1 - u0
+            if (u2 - u1 > worstRenNs) worstRenNs = u2 - u1
         } catch (t: Throwable) {
             Log.e("GameRenderer", "Frame failed", t)
         }
         if (!_ready.value) _ready.value = true
+        settleBuilds()
         frames++
         if (now - fpsClock > 1_000_000_000L) {
             _fps.value = frames
             (spec as? SceneSpec.Race)?.controller?.fps = frames
-            if (com.ngstudio.snowrace.BuildConfig.DEBUG) Log.i("FrostyFps", "#${fpsSeq++} fps=$frames worst=${worstFrameNs / 1_000_000}ms scene=${s.javaClass.simpleName}")
-            worstFrameNs = 0L
+            if (perfLog) Log.i(
+                "FrostyFps",
+                "#${fpsSeq++} fps=$frames jank=$jank/$jankScene worst=${worstFrameNs / 1_000_000}ms cmd=${worstCmdNs / 1_000_000}ms upd=${worstUpdNs / 100_000 / 10f}ms ren=${worstRenNs / 100_000 / 10f}ms scene=${s.javaClass.simpleName}",
+            )
+            worstFrameNs = 0L; worstCmdNs = 0L; worstUpdNs = 0L; worstRenNs = 0L; jank = 0
             frames = 0
             fpsClock = now
         }

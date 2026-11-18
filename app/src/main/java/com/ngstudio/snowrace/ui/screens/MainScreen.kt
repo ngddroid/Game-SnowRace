@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,6 +55,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ngstudio.snowrace.R
+import com.ngstudio.snowrace.analytics.Telemetry
 import com.ngstudio.snowrace.data.BoosterIds
 import com.ngstudio.snowrace.data.Catalog
 import com.ngstudio.snowrace.data.GameRules
@@ -230,6 +232,10 @@ fun HomeTab(save: SaveData) {
     val level = save.progress.highestUnlocked
     val spec = remember(level) { LevelRepository.get(level) }
     val today = TimeUtil.today()
+    LaunchedEffect(Unit) {
+        c.updater.check() // once per launch; never during a race
+        Telemetry.userProps(save.progress.highestUnlocked, listOf("auto", "low", "medium", "high").getOrElse(save.settings.quality) { "auto" })
+    }
     Box(Modifier.fillMaxSize()) {
         // touch layer for the 3D hero (tap = wave, drag = rotate)
         Box(
@@ -258,6 +264,7 @@ fun HomeTab(save: SaveData) {
                     if (milestone != null) RoundIconButton(R.drawable.ui_chest, { nav.rewardsFocus = 3; nav.tab = Tab.REWARDS }, badge = 1, label = "Chest")
                 }
             }
+            UpdateReadyBanner(Modifier.fillMaxWidth())
             LevelCard(level, spec.name, spec.biome.title, spec.stages.size, spec.boss, spec.newFeature)
             Spacer(Modifier.height(8.dp))
             BoosterRow(save)
@@ -270,6 +277,7 @@ fun HomeTab(save: SaveData) {
             )
             Spacer(Modifier.height(98.dp))
         }
+        NotificationAsk(save)
     }
 }
 

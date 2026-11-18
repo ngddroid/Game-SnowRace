@@ -10,6 +10,8 @@ import kotlin.math.min
 /** GPU side of a [SnowField]: a vertex grid displaced by an R8 heightmap updated row-by-row. */
 class TerrainMesh(val field: SnowField) {
     private val vao = Gl.genVao()
+    private val vbo = Gl.genBuffer()
+    private val ibo = Gl.genBuffer()
     private val count: Int
     private val intType: Boolean
     val tex: Int
@@ -27,7 +29,6 @@ class TerrainMesh(val field: SnowField) {
         verts.position(0)
         val idxCount = (nx - 1) * (nz - 1) * 6
         intType = nx * nz > 65535
-        val vbo = Gl.genBuffer(); val ibo = Gl.genBuffer()
         GLES30.glBindVertexArray(vao)
         GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, vbo)
         GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, nx * nz * 12, verts, GLES30.GL_STATIC_DRAW)
@@ -81,7 +82,11 @@ class TerrainMesh(val field: SnowField) {
         GLES30.glDrawElements(GLES30.GL_TRIANGLES, count, if (intType) GLES30.GL_UNSIGNED_INT else GLES30.GL_UNSIGNED_SHORT, 0)
     }
 
-    fun release() { TextureUtil.delete(tex) }
+    fun release() {
+        TextureUtil.delete(tex)
+        GLES30.glDeleteVertexArrays(1, intArrayOf(vao), 0)
+        GLES30.glDeleteBuffers(2, intArrayOf(vbo, ibo), 0)
+    }
 
     companion object {
         fun drawAll(res: RenderResources, cam: Camera, light: LightRig, terrains: List<TerrainMesh>) {
@@ -90,7 +95,8 @@ class TerrainMesh(val field: SnowField) {
             prog.vec3("uSnowColor", light.snow)
             prog.vec3("uSnowPacked", light.snowPacked)
             prog.f("uSparkle", light.sparkle)
-            prog.f("uHScale", SnowField.MAX_DEPTH * SnowField.SNOW_H)
+            // trail walls drawn a bit taller than the sim's snow depth so grooves read crisply
+            prog.f("uHScale", SnowField.MAX_DEPTH * SnowField.SNOW_H * 1.45f)
             prog.i("uHeight", 0)
             for (t in terrains) t.draw(prog)
         }
@@ -100,9 +106,10 @@ class TerrainMesh(val field: SnowField) {
 /** Large water quad. */
 class WaterPlane(x0: Float, x1: Float, z0: Float, z1: Float) {
     private val vao = Gl.genVao()
+    private val vbo = Gl.genBuffer()
+    private val ibo = Gl.genBuffer()
 
     init {
-        val vbo = Gl.genBuffer(); val ibo = Gl.genBuffer()
         val v = Gl.floatBuffer(12)
         v.put(floatArrayOf(x0, 0f, z0, x1, 0f, z0, x1, 0f, z1, x0, 0f, z1)).position(0)
         val i = Gl.shortBuffer(6); i.put(shortArrayOf(0, 3, 2, 0, 2, 1)).position(0)
@@ -124,11 +131,19 @@ class WaterPlane(x0: Float, x1: Float, z0: Float, z1: Float) {
         prog.vec3("uShallow", light.waterShallow)
         prog.vec3("uSkyRefl", light.skyRefl)
         prog.vec4("uLandRect", mask.x0, mask.z0, mask.w, mask.l)
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE2)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, res.causticsTex)
+        prog.i("uCaustics", 2)
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mask.tex)
         prog.i("uLand", 0)
         GLES30.glBindVertexArray(vao)
         GLES30.glDrawElements(GLES30.GL_TRIANGLES, 6, GLES30.GL_UNSIGNED_SHORT, 0)
+    }
+
+    fun release() {
+        GLES30.glDeleteVertexArrays(1, intArrayOf(vao), 0)
+        GLES30.glDeleteBuffers(2, intArrayOf(vbo, ibo), 0)
     }
 }
 
@@ -144,6 +159,10 @@ class LandMask(val x0: Float, val z0: Float, val w: Float, val l: Float, private
     private val tmp = FloatArray(cols * rows)
     private val bytes: ByteBuffer = Gl.byteBuffer(cols * rows)
     val tex: Int
+    // async rebuild state: the worker fills [bytes]; the GL thread uploads when [ready]
+    @Volatile private var ready = false
+    private var busy = false
+    private var marks = FloatArray(512)
 
     init {
         for (r in 0 until rows) {
@@ -207,5 +226,47 @@ class LandMask(val x0: Float, val z0: Float, val w: Float, val l: Float, private
         }
     }
 
+    /**
+     * Rebuilds the mask off the render thread. [fill] writes x,z pairs of extra land (bridge cells)
+     * into the array it is given and returns the pair count. Returns false while a rebuild is in flight.
+     */
+    fun requestAsync(fill: (FloatArray) -> Int): Boolean {
+        if (busy) return false
+        var need = 0
+        // grow the scratch array until the snapshot fits
+        while (true) {
+            need = fill(marks)
+            if (need >= 0) break
+            marks = FloatArray(marks.size * 2)
+        }
+        val snapshot = marks.copyOf(need * 2)
+        busy = true
+        WORKER.execute {
+            System.arraycopy(base, 0, cur, 0, cur.size)
+            for (k in 0 until need) mark(snapshot[k * 2], snapshot[k * 2 + 1])
+            blur(cur, tmp); blur(cur, tmp)
+            for (i in cur.indices) bytes.put(i, (cur[i].coerceIn(0f, 1f) * 255f).toInt().toByte())
+            ready = true
+        }
+        return true
+    }
+
+    /** Call once per frame on the GL thread: uploads a finished async rebuild. */
+    fun uploadIfReady() {
+        if (!ready) return
+        bytes.position(0)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, tex)
+        GLES30.glPixelStorei(GLES30.GL_UNPACK_ALIGNMENT, 1)
+        GLES30.glTexSubImage2D(GLES30.GL_TEXTURE_2D, 0, 0, 0, cols, rows, GLES30.GL_RED, GLES30.GL_UNSIGNED_BYTE, bytes)
+        ready = false
+        busy = false
+    }
+
     fun release() { TextureUtil.delete(tex) }
+
+    companion object {
+        private val WORKER = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+            Thread(r, "LandMask").apply { isDaemon = true; priority = Thread.NORM_PRIORITY - 2 }
+        }
+    }
 }

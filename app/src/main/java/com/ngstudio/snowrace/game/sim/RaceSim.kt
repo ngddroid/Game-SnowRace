@@ -813,15 +813,32 @@ class RaceSim(val spec: LevelSpec, setup: PlayerSetup, headless: Boolean = false
             }
             if (r.finaleDone) r.stateT = 0f
         } else {
-            r.moveAmt = damp(r.moveAmt, 0f, 6f, dt)
-            r.heading = dampAngle(r.heading, 3.14159f, 3f, dt)
+            // A step is paid for when the ball's front reaches it, so the racer is still a step or two lower.
+            // Walk up onto the last paid step so it stands on the multiplier it earned, then turn and cheer.
+            val target = if (r.finaleStep == 0) course.finale.z0 - 0.6f
+            else course.stepZ0(r.finaleStep) + Course.STEP_DEPTH * 0.5f
+            val gap = target - r.z
+            if (!r.finalePosed && gap > 0.05f) {
+                val speed = 3.2f
+                r.z += min(gap, speed * dt)
+                r.x = damp(r.x, 0f, 2.5f, dt)
+                r.heading = dampAngle(r.heading, 0f, 8f, dt)
+                r.moveAmt = damp(r.moveAmt, 0.8f, 8f, dt)
+                r.stepPhase += speed * dt * 1.6f
+                r.pushing = false
+                r.stateT = 0f // results wait until the racer is in place
+            } else {
+                r.finalePosed = true
+                r.moveAmt = damp(r.moveAmt, 0f, 6f, dt)
+                r.heading = dampAngle(r.heading, 3.14159f, 3f, dt)
+            }
         }
         // Stay on the last step that was paid for.
         val limitZ = if (r.finaleStep == 0) course.finale.z0 - 0.35f
         else course.stepZ0(r.finaleStep) + Course.STEP_DEPTH - 0.35f
         if (r.z > limitZ && (r.finaleDone || !r.hasBall)) r.z = limitZ
         r.y = course.finaleStepY(r.z)
-        if (r.hasBall) placeBall(r, false)
+        if (r.hasBall && !r.finaleDone) placeBall(r, false)
         if (r.finaleDone && r.stateT > 1.6f && phase != Phase.DONE) {
             phase = Phase.DONE
             events += SimEvent.RaceDone

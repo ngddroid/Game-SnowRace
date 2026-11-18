@@ -1,8 +1,24 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">Frosty Roll Rally</string>
 
     <!-- Legal page tokens: fill these in before publishing. -->
     <string name="legal_studio_name" translatable="false">NG Studio</string>
     <string name="legal_contact_email" translatable="false">support@example.com</string>
-    <string name="legal_effective_date" translatable="false">November 14, 2026</string>
+    <string name="legal_effective_date" translatable="false">November 18, 2026</string>
+
+    <!-- Notification channels (shown in Android's app notification settings) -->
+    <string name="channel_reminders">Daily rewards &amp; reminders</string>
+    <string name="channel_reminders_desc">When your daily gift or free spin is ready.</string>
+    <string name="channel_news">News &amp; events</string>
+    <string name="channel_news_desc">New levels, outfits and special events.</string>
+
+    <!-- Local reminder notifications -->
+    <string name="notif_daily_title">Your daily gift is ready! 🎁</string>
+    <string name="notif_daily_body" tools:ignore="PluralsCandidate">Day %1$d reward and a free wheel spin are waiting for you.</string>
+    <string name="notif_wheel_title">Free spin unlocked! 🎡</string>
+    <string name="notif_wheel_body">Spin the prize wheel for coins, gems and boosters.</string>
+    <string name="notif_back3_title">Pip misses you! ❄️</string>
+    <string name="notif_back3_body">Level %1$d is waiting. Can you roll all the way to the x5 step?</string>
+    <string name="notif_back7_title">Your snowball is ready to roll ⛄</string>
+    <string name="notif_back7_body">Jump back into level %1$d. New outfits and rewards are waiting in the shop.</string>
 </resources>

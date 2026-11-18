@@ -54,16 +54,17 @@ class MenuScene(
     private var modeT = 0f
     private var lastMode = MenuMode.HOME
 
-    private val island = InstanceBatch(buildIsland(), 1)
-    private val pines = InstanceBatch(Props.pine(), 24)
-    private val snowmen = InstanceBatch(Props.snowman(), 4)
-    private val lanterns = InstanceBatch(Props.lantern(), 6)
-    private val gifts = InstanceBatch(Props.gift(), 6)
-    private val mountains = InstanceBatch(Props.mountain(), 12)
-    private val podium = InstanceBatch(buildPodium(), 1)
-    private val floes = InstanceBatch(Props.iceFloe(), 16)
-    private val slabs = InstanceBatch(buildBridgeSlabs(), 1)
-    private val blocks = InstanceBatch(Props.block(), 128)
+    // shared meshes live in RenderResources, so switching menu <-> race never rebuilds them
+    private val island = res.custom("menu.island") { buildIsland() }
+    private val pines = res.prop("pine")
+    private val snowmen = res.prop("snowman")
+    private val lanterns = res.prop("lantern")
+    private val gifts = res.prop("gift")
+    private val mountains = res.prop("mountain")
+    private val podium = res.custom("menu.podium") { buildPodium() }
+    private val floes = res.prop("floe")
+    private val slabs = res.custom("menu.slabs") { buildBridgeSlabs() }
+    private val blocks = res.prop("block")
     private val statics = listOf(island, pines, snowmen, lanterns, gifts, mountains, slabs)
     private val floeData = ArrayList<FloatArray>()
 
@@ -72,14 +73,28 @@ class MenuScene(
     private val fx = ParticleSystem(600)
     private val flakes = FloatArray(160 * 4)
     private val pose = Pose()
+    private val rivalPose = Pose()
     private val model = FloatArray(16)
     private val q = FloatArray(4)
+    private val tmpQ = FloatArray(4)
+    private var frameDt = 1f / 60f
+    // balls queued for the ball shader this frame: x, y, z, r, qx, qy, qz, qw (no per-frame allocation)
+    private val ballBuf = FloatArray(MAX_BALLS * 8)
+    private val ballDefs = arrayOfNulls<BallDef>(MAX_BALLS)
+    private var ballCount = 0
+    // shop / profile showcase: a spin-and-hop whenever a new outfit or ball is previewed
+    private var shownLook = ""
+    private var shownBall = ""
+    private var lookShowAt = -10f
+    private var ballShowAt = -10f
+    private var shopBallX = 1.25f
     private val ballRot = floatArrayOf(0f, 0f, 0f, 1f)
     private val ballRot2 = floatArrayOf(0f, 0f, 0f, 1f)
 
     // onboarding props
     private val rollField = SnowField(0, -4f, -4f, 8f, 8f, 0.02f)
     private val rollTerrain: TerrainMesh
+    private val rollTerrains: List<TerrainMesh>
     private var rollSnow = 8f
     private var rollAngle = 0f
     private var prevBallX = 0f
@@ -92,6 +107,9 @@ class MenuScene(
         const val WATER_Y = -0.85f
         const val BRIDGE_X = 40f
         val ISLAND_R = 6.2f
+        private const val MAX_BALLS = 8
+        private val COLLECT_IDS = arrayOf("waddles", "ember", "", "sparkle", "frostking")
+        private val COLLECT_BALLS = arrayOf("candy", "galaxy", "", "rainbow", "golden")
     }
 
     init {
@@ -127,6 +145,7 @@ class MenuScene(
         mask.beginRebuild(); mask.finishRebuild()
         rollField.generate(SnowStyle.UNIFORM, 1f, Rng(5))
         rollTerrain = TerrainMesh(rollField)
+        rollTerrains = listOf(rollTerrain)
         for (i in 0 until 160) {
             flakes[i * 4] = rng.range(-8f, 8f); flakes[i * 4 + 1] = rng.range(0f, 8f); flakes[i * 4 + 2] = rng.range(-6f, 6f); flakes[i * 4 + 3] = rng.range(0f, TAU)
         }
@@ -159,14 +178,15 @@ class MenuScene(
 
     private fun buildBridgeSlabs(): Mesh {
         val md = MeshData()
-        RaceScene.addSlab(md, BRIDGE_X - 2.5f, BRIDGE_X + 2.5f, 0f, WATER_Y - 3f, -8f, -1f, 0xF0F6FF, 0xA9C6E6, 0x5F7FA8)
-        RaceScene.addSlab(md, BRIDGE_X - 2.5f, BRIDGE_X + 2.5f, 0f, WATER_Y - 3f, 2f, 9f, 0xF0F6FF, 0xA9C6E6, 0x5F7FA8)
+        RaceScene.addSlab(md, BRIDGE_X - 2.5f, BRIDGE_X + 2.5f, 0f, WATER_Y - 3f, -8f, -1f, 0xF4F9FF, 0xE6F1FB, 0xA3BFDD)
+        RaceScene.addSlab(md, BRIDGE_X - 2.5f, BRIDGE_X + 2.5f, 0f, WATER_Y - 3f, 2f, 9f, 0xF4F9FF, 0xE6F1FB, 0xA3BFDD)
         return Mesh(md, true)
     }
 
     // ===================================================================== update
     override fun update(dt: Float) {
         t += dt
+        frameDt = dt
         res.time = t
         if (mode != lastMode) { lastMode = mode; modeT = 0f; resetOnboarding() } else modeT += dt
         fx.update(dt) { x, z -> if (x * x + z * z < ISLAND_R * ISLAND_R) 0f else WATER_Y }
@@ -258,14 +278,8 @@ class MenuScene(
     override fun render() {
         res.chars.clear(); res.ballCasters.clear(); blocks.clear(); floes.clear()
         for (f in floeData) Inst.add(floes, f[0], WATER_Y + 0.05f + sin(t * 1.3f + f[4]) * 0.05f, f[1], yaw = f[3] + t * 0.03f, sx = f[2], sy = 1f, sz = f[2])
-        val balls = ArrayList<FloatArray>() // x,y,z,r,ballIndex(0=main,1=rival,..), rotIndex
-        val ballDefs = ArrayList<BallDef>()
-        val rots = ArrayList<FloatArray>()
-        fun ballAt(x: Float, y: Float, z: Float, r: Float, def: BallDef, rot: FloatArray) {
-            balls += floatArrayOf(x, y, z, r); ballDefs += def; rots += rot
-            Inst.add(res.ballCasters, x, y, z, sx = r, sy = r, sz = r, outline = 1.2f)
-        }
-        fillCharacters(::ballAt)
+        ballCount = 0
+        fillCharacters()
         if (mode == MenuMode.ONBOARD_BRIDGE) fillBridge()
 
         res.shadow.update(light.sunDir[0], light.sunDir[1], light.sunDir[2], cam.tx, 0f, cam.tz, 9f)
@@ -291,9 +305,9 @@ class MenuScene(
         for (b in res.chars.all()) b.draw()
         // balls
         res.common(res.ball, cam, light)
-        for (i in balls.indices) {
-            val b = balls[i]; val d = ballDefs[i]; val rot = rots[i]
-            Mat4.trs(model, 0, b[0], b[1], b[2], rot[0], rot[1], rot[2], rot[3], b[3], b[3], b[3])
+        for (i in 0 until ballCount) {
+            val o = i * 8; val b = ballBuf; val d = ballDefs[i] ?: continue
+            Mat4.trs(model, 0, b[o], b[o + 1], b[o + 2], b[o + 4], b[o + 5], b[o + 6], b[o + 7], b[o + 3], b[o + 3], b[o + 3])
             res.ball.mat4("uModel", model)
             res.ball.vec3("uBase", ((d.base shr 16) and 0xFF) / 255f, ((d.base shr 8) and 0xFF) / 255f, (d.base and 0xFF) / 255f)
             res.ball.vec3("uAccent", ((d.accent shr 16) and 0xFF) / 255f, ((d.accent shr 8) and 0xFF) / 255f, (d.accent and 0xFF) / 255f)
@@ -301,12 +315,14 @@ class MenuScene(
             res.ball.f("uGlow", d.glow)
             res.ballMesh.draw()
         }
-        if (mode == MenuMode.ONBOARD_ROLL) TerrainMesh.drawAll(res, cam, light, listOf(rollTerrain))
+        if (mode == MenuMode.ONBOARD_ROLL) TerrainMesh.drawAll(res, cam, light, rollTerrains)
         water.draw(res, cam, light, WATER_Y, mask)
-        res.beginOutline(cam, light)
-        for (b in res.chars.all()) b.draw()
-        res.ballCasters.draw()
-        res.endOutline()
+        if (res.outlines) {
+            res.beginOutline(cam, light)
+            for (b in res.chars.all()) b.draw()
+            res.ballCasters.draw()
+            res.endOutline()
+        }
         res.drawSky(cam, light)
 
         // billboards
@@ -317,7 +333,7 @@ class MenuScene(
         res.bill.clear(); res.ground.clear()
         val pa = res.particleAtlas
         fx.fill(pa, res.bill, res.ground)
-        val dt = 1f / 60f
+        val dt = frameDt
         for (i in 0 until 160) {
             val o = i * 4
             flakes[o + 1] -= 0.9f * dt
@@ -350,27 +366,70 @@ class MenuScene(
         p.mouth = 0f; p.scale = 1f; p.time = t + seed; p.lookX = sin(t * 0.5f + seed) * 0.6f; p.outline = 1f
     }
 
-    private fun fillCharacters(ballAt: (Float, Float, Float, Float, BallDef, FloatArray) -> Unit) {
+    /** Queues a ball for the ball shader (copies [rot], so callers may reuse scratch quaternions). */
+    private fun ballAt(x: Float, y: Float, z: Float, r: Float, def: BallDef, rot: FloatArray) {
+        if (ballCount >= MAX_BALLS) return
+        val o = ballCount * 8
+        ballBuf[o] = x; ballBuf[o + 1] = y; ballBuf[o + 2] = z; ballBuf[o + 3] = r
+        ballBuf[o + 4] = rot[0]; ballBuf[o + 5] = rot[1]; ballBuf[o + 6] = rot[2]; ballBuf[o + 7] = rot[3]
+        ballDefs[ballCount++] = def
+        Inst.add(res.ballCasters, x, y, z, sx = r, sy = r, sz = r, outline = 1.2f)
+    }
+
+    private fun fillCharacters() {
         val p = pose
         when (mode) {
             MenuMode.HOME, MenuMode.SHOP, MenuMode.PROFILE, MenuMode.BACKDROP -> {
+                val showcase = mode == MenuMode.SHOP || mode == MenuMode.PROFILE
+                // a new outfit / ball in the shop gets a little showcase (not on first appearance)
+                if (look.id != shownLook) { if (shownLook.isNotEmpty() && showcase) { lookShowAt = t; sparkleRing(0f, 0.9f, 0f) }; shownLook = look.id }
+                if (ball.id != shownBall) { if (shownBall.isNotEmpty() && showcase) { ballShowAt = t; sparkleRing(shopBallX, 0.4f, 0.45f) }; shownBall = ball.id }
                 val since = t - waveAt
-                val yaw = if (mode == MenuMode.HOME) sin(t * 0.35f) * 0.25f + dragYaw else dragYaw + t * 0.25f * (if (mode == MenuMode.SHOP) 0f else 0f)
+                val show = t - lookShowAt
+                var yaw = if (mode == MenuMode.HOME) sin(t * 0.35f) * 0.25f + dragYaw else dragYaw
                 basePose(p, 0f, 0.28f, 0f, yaw, 0f)
-                if (since < 1.6f) {
+                if (show < 1.1f) {
+                    // spin once with a hop, arms up
+                    val k = clamp01(show / 0.9f)
+                    yaw += TAU * Easing.outBack(k)
+                    p.yaw = yaw
+                    p.jump = if (show < 0.55f) sin(show / 0.55f * PI_F) * 0.2f else 0f // the shop frames the head near the top
+                    p.armsUp = 1f - clamp01((show - 0.7f) / 0.4f); p.mouth = 1f
+                } else if (since < 1.6f) {
                     p.wave = 1f; p.mouth = 1f
                     p.jump = if (since < 0.5f) sin(since / 0.5f * PI_F) * 0.35f else 0f
                     p.squash = if (since > 0.45f && since < 0.65f) -0.12f * sin((since - 0.45f) / 0.2f * PI_F) else p.squash
+                } else if (showcase) {
+                    // idle showcase loop: a hop and a wave, then a happy sway
+                    val c = (t - lookShowAt) % 5f
+                    if (c < 0.5f) { p.jump = sin(c / 0.5f * PI_F) * 0.13f; p.mouth = 1f }
+                    else if (c in 2.2f..3.4f) { p.wave = 1f; p.mouth = 0.6f }
+                    p.lean = sin(t * 2.2f) * 0.05f
                 } else if ((t % 9f) < 1.2f) { p.wave = 0.8f; p.mouth = 0.5f }
                 res.rig.draw(look, p)
-                // ball beside the hero
-                val br = 0.45f
-                Quat.euler(ballRot, t * 0.2f, 0f, 0f)
-                ballAt(1.25f, br, 0.35f, br, ball, ballRot)
-                // trail sparkle preview
-                if (trail.id != "none" && rng.chance(0.35f)) {
+                // ball beside the hero: in the shop it rolls back and forth and bounces in when changed
+                val bShow = t - ballShowAt
+                var br = 0.45f
+                var by = br
+                if (showcase) {
+                    // short roll that stays inside the shop framing (the panel covers the lower screen)
+                    br = 0.34f; by = br
+                    val bx = 0.86f + sin(t * 1.3f) * 0.1f
+                    rollBall(ballRot, bx, 0.45f, br)
+                    shopBallX = bx
+                    if (bShow < 0.7f) {
+                        by += abs(sin(bShow / 0.7f * PI_F * 2f)) * 0.3f * (1f - bShow / 0.7f)
+                        br *= 1f + 0.22f * (1f - bShow / 0.7f)
+                    }
+                } else {
+                    shopBallX = 1.25f
+                    Quat.euler(ballRot, t * 0.2f, 0f, 0f)
+                }
+                ballAt(shopBallX, by, if (showcase) 0.45f else 0.35f, br, ball, ballRot)
+                // trail preview streams behind the ball
+                if (trail.id != "none" && rng.chance(if (showcase) 0.6f else 0.35f)) {
                     val col = trail.colors[rng.nextInt(trail.colors.size)]
-                    fx.emit(1.25f + rng.range(-0.4f, 0.4f), rng.range(0.3f, 1.1f), 0.35f + rng.range(-0.3f, 0.3f), 0f, rng.range(0.3f, 0.8f), 0f, 0.9f, 0.22f, 0.05f, col, spriteOf(trail.shape), additive = true, rotation = rng.range(0f, TAU))
+                    fx.emit(shopBallX + rng.range(-0.3f, 0.3f), rng.range(0.25f, 0.9f), 0.35f + rng.range(-0.3f, 0.3f), 0f, rng.range(0.3f, 0.8f), 0f, 0.9f, 0.22f, 0.05f, col, spriteOf(trail.shape), additive = true, rotation = rng.range(0f, TAU))
                 }
             }
             MenuMode.ONBOARD_ROLL -> {
@@ -411,18 +470,18 @@ class MenuScene(
                 res.rig.draw(look, p)
                 val bz = hz + Racer.BODY_R + big * 0.92f
                 Quat.axisAngle(q, 1f, 0f, 0f, hz / big)
-                ballAt(0.15f, big, bz, big, ball, q.copyOf())
+                ballAt(0.15f, big, bz, big, ball, q)
                 // rival with a tiny ball walks the other way and gets bonked
                 val rival = Catalog.character("bubbles")
                 val hitT = 2.0f
-                val rp = Pose()
+                val rp = rivalPose
                 if (u < hitT) {
                     val rz = 2.6f - u * 1.0f
                     basePose(rp, 0f, 0f, rz, PI_F, 3f)
                     rp.move = 1f; rp.phase = t * 9f; rp.pushing = true; rp.ballR = 0.3f
                     res.rig.draw(rival, rp)
                     Quat.axisAngle(q, 1f, 0f, 0f, -rz / 0.3f)
-                    ballAt(0f, 0.3f, rz - Racer.BODY_R - 0.28f, 0.3f, Catalog.ball("candy"), q.copyOf())
+                    ballAt(0f, 0.3f, rz - Racer.BODY_R - 0.28f, 0.3f, Catalog.ball("candy"), q)
                 } else {
                     val k = u - hitT
                     if (k < 0.05f && modeT > 0.2f) {
@@ -441,9 +500,8 @@ class MenuScene(
                 }
             }
             MenuMode.ONBOARD_COLLECT -> {
-                val ids = listOf("waddles", "ember", look.id, "sparkle", "frostking")
-                val balls = listOf("candy", "galaxy", ball.id, "rainbow", "golden")
-                ids.forEachIndexed { i, id ->
+                for (i in COLLECT_IDS.indices) {
+                    val id = if (i == 2) look.id else COLLECT_IDS[i]
                     val x = -1.9f + i * 0.95f
                     val z = -abs(x) * 0.45f
                     val phase = (t * 1.6f - i * 0.35f) % 3f
@@ -451,8 +509,8 @@ class MenuScene(
                     if (phase < 0.6f) { p.jump = sin(phase / 0.6f * PI_F) * 0.45f; p.armsUp = 1f; p.mouth = 1f }
                     res.rig.draw(Catalog.character(id), p)
                     val br = 0.22f
-                    val bq = FloatArray(4); Quat.euler(bq, t + i, 0f, 0f)
-                    ballAt(x + 0.3f, br, z + 0.55f, br, Catalog.ball(balls[i]), bq)
+                    Quat.euler(tmpQ, t + i, 0f, 0f)
+                    ballAt(x + 0.3f, br, z + 0.55f, br, if (i == 2) ball else Catalog.ball(COLLECT_BALLS[i]), tmpQ)
                 }
             }
         }
@@ -468,6 +526,14 @@ class MenuScene(
         }
     }
 
+    private fun sparkleRing(x: Float, y: Float, z: Float) {
+        for (i in 0 until 14) {
+            val a = i / 14f * TAU
+            fx.emit(x, y, z, cos(a) * 1.8f, rng.range(0.4f, 1.6f), sin(a) * 1.8f, 0.6f, 0.26f, 0.05f, 0xFFFFE27A.toInt(), ParticleAtlas.SPARKLE, dragK = 2.5f, additive = true, rotation = a)
+        }
+        fx.emit(x, y, z, 0f, 0f, 0f, 0.4f, 0.4f, 2.2f, 0xFFFFFFFF.toInt(), ParticleAtlas.RING, additive = true)
+    }
+
     private fun spriteOf(s: TrailShape) = when (s) {
         TrailShape.CIRCLE -> ParticleAtlas.SOFT; TrailShape.STAR -> ParticleAtlas.STAR; TrailShape.HEART -> ParticleAtlas.HEART
         TrailShape.FLAKE -> ParticleAtlas.FLAKE; TrailShape.SPARKLE -> ParticleAtlas.SPARKLE; TrailShape.NOTE -> ParticleAtlas.NOTE
@@ -475,6 +541,7 @@ class MenuScene(
 
     override fun release() {
         rollTerrain.release()
+        water.release()
         mask.release()
     }
 }

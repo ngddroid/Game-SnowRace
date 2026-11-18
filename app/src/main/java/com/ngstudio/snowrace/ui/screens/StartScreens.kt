@@ -61,6 +61,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -86,6 +87,7 @@ import com.ngstudio.snowrace.ui.components.LocalContainer
 import com.ngstudio.snowrace.ui.components.OutlinedText
 import com.ngstudio.snowrace.ui.components.Panel
 import com.ngstudio.snowrace.ui.components.SnowfallLayer
+import com.ngstudio.snowrace.ui.components.StudioCredit
 import com.ngstudio.snowrace.ui.components.UiIcon
 import com.ngstudio.snowrace.ui.components.pressable
 import com.ngstudio.snowrace.ui.theme.Palette
@@ -157,7 +159,9 @@ fun SplashScreen() {
                 Spacer(Modifier.height(10.dp))
                 OutlinedText(loadingLine(progress), style = Type.Label, outlineWidth = 3.dp)
             }
-            Spacer(Modifier.height(48.dp))
+            Spacer(Modifier.height(18.dp))
+            StudioCredit(logoWidth = 96.dp)
+            Spacer(Modifier.height(20.dp))
         }
     }
 }
@@ -191,6 +195,7 @@ fun OnboardingScreen() {
     val nav = LocalNav.current
     var page by remember { mutableIntStateOf(0) }
     val total = pages.size + 1 // last step: name & starter
+    LaunchedEffect(Unit) { com.ngstudio.snowrace.analytics.Telemetry.tutorialBegin() }
     LaunchedEffect(page) {
         if (page < pages.size) c.stage.showMenu(pages[page].mode) else c.stage.showMenu(MenuMode.HOME)
     }
@@ -225,6 +230,7 @@ fun OnboardingScreen() {
                             out = out.copy(profile = out.profile.copy(name = name, character = starter, onboardingDone = true))
                             GameRules.refreshMissions(out, TimeUtil.today())
                         }
+                        com.ngstudio.snowrace.analytics.Telemetry.tutorialComplete()
                         c.audio.play(Sfx.UNLOCK)
                         nav.replaceAll(Screen.Main)
                     }
@@ -317,13 +323,17 @@ fun LegalScreen(doc: LegalDoc) {
     val c = LocalContainer.current
     val nav = LocalNav.current
     val ctx = LocalContext.current
-    val html = remember(doc) {
+    val appName = stringResource(R.string.app_name)
+    val studio = stringResource(R.string.legal_studio_name)
+    val email = stringResource(R.string.legal_contact_email)
+    val effective = stringResource(R.string.legal_effective_date)
+    val html = remember(doc, appName, studio, email, effective) {
         val raw = ctx.assets.open("legal/${doc.file}").bufferedReader(Charsets.UTF_8).use { it.readText() }
         fun esc(s: String) = TextUtils.htmlEncode(s)
-        raw.replace("{{APP_NAME}}", esc(ctx.getString(R.string.app_name)))
-            .replace("{{STUDIO_NAME}}", esc(ctx.getString(R.string.legal_studio_name)))
-            .replace("{{CONTACT_EMAIL}}", esc(ctx.getString(R.string.legal_contact_email)))
-            .replace("{{EFFECTIVE_DATE}}", esc(ctx.getString(R.string.legal_effective_date)))
+        raw.replace("{{APP_NAME}}", esc(appName))
+            .replace("{{STUDIO_NAME}}", esc(studio))
+            .replace("{{CONTACT_EMAIL}}", esc(email))
+            .replace("{{EFFECTIVE_DATE}}", esc(effective))
             .replace("{{APP_VERSION}}", esc(BuildConfig.VERSION_NAME))
     }
     Column(Modifier.fillMaxSize().background(Palette.bgGradient)) {

@@ -144,6 +144,7 @@ private fun DailyCalendar(save: SaveData, today: Long) {
             c.save.update { r.first }
             c.audio.play(Sfx.CHEST); c.haptics.play(Haptic.SUCCESS)
             val rw = r.second
+            com.ngstudio.snowrace.analytics.Telemetry.reward("daily_login", rw.coins, rw.gems)
             nav.showToast(when { rw.item != null -> "Unlocked Flurry the Snowman!"; rw.gems > 0 -> "+${rw.gems} gems!"; else -> "+${rw.coins} coins!" })
         }, enabled = claimable, modifier = Modifier.fillMaxWidth(), colors = Buttons.Green, height = 52.dp, shine = claimable)
     }
@@ -216,6 +217,7 @@ private fun LuckyWheel(save: SaveData, today: Long) {
                 if (slice != lastTick) { lastTick = slice; c.audio.play(Sfx.WHEEL_TICK, 0.6f, 1.1f); c.haptics.play(Haptic.TICK) }
             }
             c.save.update { GameRules.applyWheel(it, index, today, viaAd) }
+            com.ngstudio.snowrace.analytics.Telemetry.reward(if (viaAd) "wheel_ad" else "wheel_free", slices[index].coins, slices[index].gems)
             c.audio.play(Sfx.WHEEL_WIN); c.haptics.play(Haptic.SUCCESS)
             val s = slices[index]
             nav.showToast(when { s.booster != null -> "Won a ${if (s.booster.contains("big")) "Big Start" else "Turbo"} booster!"; s.gems > 0 -> "Won ${s.gems} gems!"; else -> "Won ${s.coins} coins!" })
@@ -273,7 +275,7 @@ private fun LuckyWheel(save: SaveData, today: Long) {
             GameButton("Free Spin", onClick = { spin(false) }, enabled = free && !spinning, modifier = Modifier.weight(1f), colors = Buttons.Berry, height = 52.dp, shine = free)
             if (c.ads.rewardedAvailable) {
                 GameButton("x$adLeft", onClick = {
-                    c.ads.showRewarded("wheel_spin") { ok -> if (ok) spin(true) }
+                    c.ads.showRewarded("wheel_spin") { ok -> com.ngstudio.snowrace.analytics.Telemetry.rewardedAd("wheel_spin", ok); if (ok) spin(true) }
                 }, enabled = !free && adLeft > 0 && !spinning, modifier = Modifier.weight(1f), colors = Buttons.Gold, height = 52.dp, icon = R.drawable.ui_ad)
             }
         }
@@ -311,6 +313,7 @@ private fun Missions(save: SaveData) {
                     else -> GameButton("${m.reward}", onClick = {
                         val r = GameRules.claimMission(c.save.data, i) ?: return@GameButton
                         c.save.update { r }
+                        com.ngstudio.snowrace.analytics.Telemetry.reward("mission_${m.id}", m.reward, m.rewardGems)
                         c.audio.play(Sfx.COIN); c.haptics.play(Haptic.SUCCESS)
                         nav.showToast("+${m.reward} coins" + if (m.rewardGems > 0) ", +${m.rewardGems} gems" else "")
                     }, enabled = done, modifier = Modifier.width(96.dp), height = 44.dp, colors = Buttons.Gold, icon = R.drawable.ui_coin, textStyle = Type.Label)
@@ -339,6 +342,7 @@ private fun MilestoneCard(m: Int) {
         Spacer(Modifier.height(10.dp))
         GameButton("Open Chest", onClick = {
             c.save.update { GameRules.claimMilestone(it, m) }
+            com.ngstudio.snowrace.analytics.Telemetry.reward("milestone_$m", coins, gems)
             c.audio.play(Sfx.CHEST); c.haptics.play(Haptic.SUCCESS)
             nav.showToast("+$coins coins, +$gems gems!")
         }, modifier = Modifier.fillMaxWidth(), colors = Buttons.Purple, height = 52.dp, shine = true)

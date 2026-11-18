@@ -1,0 +1,19 @@
+# Gradle / build output
+.gradle/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Android Studio (per-user state)
+.idea/workspace.xml
+.idea/caches/
+.idea/deploymentTargetSelector.xml
+*.iml
+
+# Signing keys: never commit
+*.jks
+*.keystore
+
+# macOS
+.DS_Store

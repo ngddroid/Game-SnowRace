@@ -10,6 +10,9 @@ import android.os.SystemClock
 import android.util.Log
 import java.io.DataInputStream
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
@@ -48,6 +51,9 @@ enum class Sfx(val res: String, val minIntervalMs: Int = 0, val baseVolume: Floa
     POP("sfx_pop", 30, 0.8f),
     ICE_CRACK("sfx_ice_crack", 120, 1f),
     FINALE_STEP("sfx_finale_step", 40, 0.9f),
+    BONK_HEAVY("sfx_bonk_heavy", 150, 1f),
+    BRIDGE_DONE("sfx_bridge_done", 300, 0.8f),
+    FINALE_MAX("sfx_finale_max", 0, 0.9f),
 }
 
 enum class Music(val res: String) { MENU("music_menu"), RACE("music_race"), BOSS("music_boss") }
@@ -97,40 +103,70 @@ class AudioEngine(private val context: Context) {
         }
     }
 
-    /** Plays a one-shot. Returns stream id (0 if not played). */
-    fun play(s: Sfx, volume: Float = 1f, pitch: Float = 1f, pan: Float = 0f): Int {
-        if (!sfxEnabled) return 0
-        val id = ids[s] ?: return 0
-        if (id !in loaded) return 0
+    // SoundPool calls can block for several ms (internal locks, AudioTrack rate changes), which showed up as
+    // frame hitches when they ran on the GL thread. Every pool call now goes to one ordered worker thread.
+    private val sfxThread = Executors.newSingleThreadExecutor { r -> Thread(r, "Sfx").apply { isDaemon = true } }
+    /** Loop handle -> SoundPool stream id (filled in by the worker once the loop has started). */
+    private val loopStreams = ConcurrentHashMap<Int, Int>()
+    /** Loop handle -> last volume / rate sent (touched only by the caller thread). */
+    private val loopSent = HashMap<Int, FloatArray>()
+    private val nextLoop = AtomicInteger(1)
+
+    /** Plays a one-shot without blocking the caller. */
+    fun play(s: Sfx, volume: Float = 1f, pitch: Float = 1f, pan: Float = 0f) {
+        if (!sfxEnabled) return
+        val id = ids[s] ?: return
+        if (id !in loaded) return
         if (s.minIntervalMs > 0) {
             val now = SystemClock.uptimeMillis()
             val last = lastPlayed[s] ?: 0L
-            if (now - last < s.minIntervalMs) return 0
+            if (now - last < s.minIntervalMs) return
             lastPlayed[s] = now
         }
         val v = (volume * s.baseVolume * sfxVolume).coerceIn(0f, 1f)
         val l = v * min(1f, 1f - pan)
         val r = v * min(1f, 1f + pan)
-        return pool.play(id, l, r, 1, 0, pitch.coerceIn(0.5f, 2f))
+        val rate = pitch.coerceIn(0.5f, 2f)
+        sfxThread.execute { pool.play(id, l, r, 1, 0, rate) }
     }
 
+    /** Starts a looping sound; returns a handle for [setLoop] / [stopLoop] (0 if the sound is not loaded yet). */
     fun startLoop(s: Sfx, volume: Float = 0f, pitch: Float = 1f): Int {
         val id = ids[s] ?: return 0
         if (id !in loaded) return 0
         val v = if (sfxEnabled) volume * s.baseVolume * sfxVolume else 0f
-        return pool.play(id, v, v, 2, -1, pitch.coerceIn(0.5f, 2f))
+        val rate = pitch.coerceIn(0.5f, 2f)
+        val h = nextLoop.getAndIncrement()
+        synchronized(loopSent) { loopSent[h] = floatArrayOf(v, rate) }
+        sfxThread.execute { loopStreams[h] = pool.play(id, v, v, 2, -1, rate) }
+        return h
     }
 
-    fun setLoop(stream: Int, volume: Float, pitch: Float) {
-        if (stream == 0) return
+    /** Sends volume / rate only when they change audibly (it used to be two SoundPool calls every frame). */
+    fun setLoop(handle: Int, volume: Float, pitch: Float) {
+        if (handle == 0) return
         val v = if (sfxEnabled) (volume * sfxVolume).coerceIn(0f, 1f) else 0f
-        pool.setVolume(stream, v, v)
-        pool.setRate(stream, pitch.coerceIn(0.5f, 2f))
+        val rate = pitch.coerceIn(0.5f, 2f)
+        val sent = synchronized(loopSent) { loopSent[handle] } ?: return
+        val sendVol = abs(sent[0] - v) >= 0.02f || (v == 0f && sent[0] != 0f)
+        val sendRate = abs(sent[1] - rate) >= 0.015f
+        if (!sendVol && !sendRate) return
+        if (sendVol) sent[0] = v
+        if (sendRate) sent[1] = rate
+        sfxThread.execute {
+            val sid = loopStreams[handle] ?: return@execute
+            if (sendVol) pool.setVolume(sid, v, v)
+            if (sendRate) pool.setRate(sid, rate)
+        }
     }
 
-    fun stopLoop(stream: Int) { if (stream != 0) pool.stop(stream) }
+    fun stopLoop(handle: Int) {
+        if (handle == 0) return
+        synchronized(loopSent) { loopSent.remove(handle) }
+        sfxThread.execute { loopStreams.remove(handle)?.let { pool.stop(it) } }
+    }
 
-    fun stopAllLoops() { pool.autoPause(); pool.autoResume() }
+    fun stopAllLoops() { sfxThread.execute { pool.autoPause(); pool.autoResume() } }
 
     // ---- Music -----------------------------------------------------------------------------
     fun playMusic(m: Music?) = music.play(m)
@@ -138,8 +174,8 @@ class AudioEngine(private val context: Context) {
     fun setMusicVolume(v: Float) { music.volume = v }
     fun duckMusic(amount: Float, ms: Long) = music.duck(amount, ms)
 
-    fun onPause() { pool.autoPause(); music.pause() }
-    fun onResume() { pool.autoResume(); music.resume() }
+    fun onPause() { sfxThread.execute { pool.autoPause() }; music.pause() }
+    fun onResume() { sfxThread.execute { pool.autoResume() }; music.resume() }
 }
 
 /** Streams 16-bit mono PCM WAV loops with seamless looping and crossfades. */

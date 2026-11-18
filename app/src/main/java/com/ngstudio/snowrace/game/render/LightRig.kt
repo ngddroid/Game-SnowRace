@@ -51,7 +51,7 @@ class LightRig {
         rgb(biome.snow, snow)
         rgb(biome.snowShadow, snowPacked)
         // packed snow is lighter than the shadow color
-        for (i in 0..2) snowPacked[i] = snowPacked[i] * 0.45f + 0.55f * snow[i] * 0.92f
+        for (i in 0..2) snowPacked[i] = snowPacked[i] * 0.22f + 0.78f * snow[i] * 0.96f
         rgb(biome.waterDeep, waterDeep)
         rgb(biome.waterShallow, waterShallow)
         rgb(biome.cliff, cliff)
@@ -59,51 +59,59 @@ class LightRig {
         lanternGlow = 0f
         when (time) {
             TimeOfDay.DAY -> {
-                setDir(-0.45f, 0.8f, -0.42f)
-                set(sunColor, 0.36f, 0.27f, 0.12f)
-                set(ambSky, 0.70f, 0.79f, 0.97f)
-                set(ambGround, 0.60f, 0.63f, 0.73f)
-                set(rim, 0.55f, 0.72f, 1.0f)
+                setDir(-0.42f, 0.84f, -0.36f)
+                set(sunColor, 0.3f, 0.27f, 0.21f)
+                set(ambSky, 0.79f, 0.85f, 0.97f)
+                set(ambGround, 0.7f, 0.76f, 0.86f)
+                set(rim, 0.6f, 0.75f, 1.0f)
                 for (i in 0..2) { skyTop[i] = bTop[i]; skyHorizon[i] = bHor[i]; fog[i] = bFog[i] }
                 set(gradeTint, 1f, 1f, 1f)
-                saturation = 1.12f; contrast = 1.05f; brightness = 1.0f
+                saturation = 1.08f; contrast = 1.0f; brightness = 1.0f
             }
             TimeOfDay.SUNSET -> {
                 setDir(-0.75f, 0.42f, -0.25f)
-                set(sunColor, 0.52f, 0.30f, 0.12f)
-                set(ambSky, 0.62f, 0.58f, 0.82f)
-                set(ambGround, 0.56f, 0.48f, 0.6f)
+                set(sunColor, 0.34f, 0.24f, 0.14f)
+                set(ambSky, 0.8f, 0.76f, 0.92f)
+                set(ambGround, 0.74f, 0.68f, 0.8f)
                 set(rim, 1.0f, 0.62f, 0.5f)
                 mix(skyTop, bTop, floatArrayOf(0.33f, 0.32f, 0.72f), 0.65f)
                 mix(skyHorizon, bHor, floatArrayOf(1.0f, 0.68f, 0.52f), 0.7f)
                 mix(fog, bFog, floatArrayOf(0.97f, 0.76f, 0.72f), 0.65f)
-                set(gradeTint, 1.04f, 0.98f, 0.96f)
-                saturation = 1.15f; contrast = 1.06f; brightness = 1.0f
+                set(gradeTint, 1.03f, 0.99f, 0.97f)
+                saturation = 1.08f; contrast = 1.0f; brightness = 1.0f
                 lanternGlow = 0.5f
             }
             TimeOfDay.NIGHT -> {
                 setDir(-0.35f, 0.75f, 0.2f)
-                set(sunColor, 0.26f, 0.31f, 0.42f)
-                set(ambSky, 0.42f, 0.5f, 0.8f)
-                set(ambGround, 0.32f, 0.36f, 0.55f)
+                set(sunColor, 0.2f, 0.24f, 0.32f)
+                set(ambSky, 0.62f, 0.7f, 0.94f)
+                set(ambGround, 0.52f, 0.58f, 0.78f)
                 set(rim, 0.45f, 0.95f, 0.85f)
                 mix(skyTop, bTop, floatArrayOf(0.05f, 0.07f, 0.2f), 0.85f)
                 mix(skyHorizon, bHor, floatArrayOf(0.16f, 0.26f, 0.5f), 0.8f)
                 mix(fog, bFog, floatArrayOf(0.17f, 0.23f, 0.43f), 0.82f)
-                for (i in 0..2) { waterDeep[i] *= 0.55f; waterShallow[i] *= 0.65f }
-                set(gradeTint, 0.96f, 1.0f, 1.06f)
-                saturation = 1.1f; contrast = 1.08f; brightness = 1.05f
+                for (i in 0..2) { waterDeep[i] *= 0.7f; waterShallow[i] *= 0.8f }
+                set(gradeTint, 0.97f, 1.0f, 1.05f)
+                saturation = 1.06f; contrast = 1.02f; brightness = 1.02f
                 night = 1f
                 lanternGlow = 1f
             }
         }
         for (i in 0..2) skyRefl[i] = skyHorizon[i] * 0.7f + skyTop[i] * 0.3f
         when (weather) {
-            Weather.CLEAR -> { fogStart = 55f; fogEnd = 190f }
-            Weather.SNOW -> { fogStart = 40f; fogEnd = 160f }
-            Weather.BLIZZARD -> { fogStart = 18f; fogEnd = 95f; saturation -= 0.08f }
+            Weather.CLEAR -> { fogStart = 110f; fogEnd = 330f }
+            Weather.SNOW -> { fogStart = 90f; fogEnd = 290f }
+            Weather.BLIZZARD -> { fogStart = 40f; fogEnd = 160f; saturation -= 0.05f }
         }
-        sparkle = if (time == TimeOfDay.NIGHT) 0.6f else 1f
+        sparkle = 0f
+        vignette = 0f
+        // bright, clean water and pale cliffs (the "crystal" look)
+        for (i in 0..2) {
+            val d = waterDeep[i]; val sh = waterShallow[i]
+            waterDeep[i] = (d * 0.45f + sh * 0.55f) * 1.05f
+            waterShallow[i] = (sh * 1.1f).coerceAtMost(1f)
+            cliff[i] = cliff[i] * 0.35f + 0.65f
+        }
         // outline: deep navy, slightly tinted by sky
         set(outline, 0.1f + skyTop[0] * 0.05f, 0.14f + skyTop[1] * 0.05f, 0.27f + skyTop[2] * 0.05f)
     }

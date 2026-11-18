@@ -169,6 +169,7 @@ fun ShopTab(save: SaveData) {
                                         val res = GameRules.buy(c.save.data, sel.id, sel.price)
                                         if (res != null) {
                                             c.save.update { res }
+                                            com.ngstudio.snowrace.analytics.Telemetry.spend(sel.id, if (sel.price.type == PriceType.GEMS) "gems" else "coins", sel.price.amount)
                                             c.audio.play(Sfx.UNLOCK); c.stage.wave()
                                             reveal = sel.id
                                         } else { c.audio.play(Sfx.ERROR); nav.showToast("Not enough ${if (sel.price.type == PriceType.GEMS) "gems" else "coins"}") }

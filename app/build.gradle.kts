@@ -4,6 +4,17 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// Firebase (Analytics, Crashlytics, Cloud Messaging) reads its project keys from app/google-services.json,
+// downloaded from the Firebase console for this applicationId. Without the file the game still builds and
+// runs: every Firebase feature simply stays off (see analytics/Telemetry.kt).
+val hasFirebaseConfig = file("google-services.json").exists()
+if (hasFirebaseConfig) {
+    apply(plugin = libs.plugins.google.services.get().pluginId)
+    apply(plugin = libs.plugins.firebase.crashlytics.get().pluginId)
+} else {
+    logger.warn("app/google-services.json is missing: building without Firebase (analytics, crash reports and push are off).")
+}
+
 android {
     namespace = "com.ngstudio.snowrace"
     compileSdk {
@@ -18,6 +29,7 @@ android {
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("boolean", "FIREBASE_CONFIGURED", hasFirebaseConfig.toString())
     }
 
     buildTypes {
@@ -67,6 +79,14 @@ dependencies {
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.kotlinx.serialization.json)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
+    implementation(libs.firebase.crashlytics)
+    implementation(libs.firebase.messaging)
+    implementation(libs.play.app.update)
+    implementation(libs.androidx.work.runtime)
+    // Play / Firebase pull in fragment 1.1; activity-result APIs need 1.3+ to deliver results correctly
+    implementation(libs.androidx.fragment)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

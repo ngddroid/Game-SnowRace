@@ -30,6 +30,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -66,6 +68,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ngstudio.snowrace.R
+import com.ngstudio.snowrace.app.LoadingCover
 import com.ngstudio.snowrace.audio.Haptic
 import com.ngstudio.snowrace.audio.Music
 import com.ngstudio.snowrace.audio.Sfx
@@ -136,8 +139,13 @@ fun RaceScreen(level: Int, boosters: Set<String>) {
     var popupSeq by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(ctrl) {
-        c.stage.showRace(ctrl)
+        // hold the sim while the level is built behind the loading cover, so the intro starts as the cover lifts
+        ctrl.paused = true
         c.stage.playMusic(if (ctrl.spec.isBoss) Music.BOSS else Music.RACE)
+        val sub = (if (ctrl.spec.isBoss) "BOSS · " else "") + ctrl.spec.name.ifBlank { ctrl.spec.biome.title }
+        c.stage.swapScene(LoadingCover("LEVEL $level", sub)) { c.stage.showRace(ctrl) }
+        com.ngstudio.snowrace.analytics.Telemetry.levelStart(level, ctrl.spec.isBoss)
+        if (!paused && result == null) ctrl.paused = false
     }
     DisposableEffect(ctrl) { onDispose { ctrl.paused = true } }
     LaunchedEffect(ctrl) {
@@ -150,7 +158,10 @@ fun RaceScreen(level: Int, boosters: Set<String>) {
                 is UiEvent.FinaleStep -> finaleMult = e.mult
                 UiEvent.RaceLost -> lost = true
                 is UiEvent.Finished -> {
+                    val before = c.save.data.progress.highestUnlocked
                     c.save.update { GameRules.applyRace(it, e.result, emptySet()) }
+                    com.ngstudio.snowrace.analytics.Telemetry.levelEnd(e.result)
+                    c.save.data.progress.highestUnlocked.let { if (it > before) com.ngstudio.snowrace.analytics.Telemetry.levelUp(it) }
                     delay(if (e.result.cleared) 600 else 300)
                     c.stage.playMusic(Music.MENU)
                     result = e.result
@@ -237,11 +248,13 @@ fun RaceScreen(level: Int, boosters: Set<String>) {
         // finale multiplier
         finaleMult?.let { m ->
             if (result == null) {
-                val pop = remember(m) { Animatable(1.6f) }
+                val max = m >= 5f
+                val pop = remember(m) { Animatable(if (max) 2.4f else 1.6f) }
                 LaunchedEffect(m) { pop.animateTo(1f, spring(dampingRatio = 0.35f)) }
-                OutlinedText("x" + multText(m), style = Type.Huge, outlineWidth = 8.dp,
-                    brush = Brush.verticalGradient(listOf(Color(0xFFFFF3B0), Palette.Gold)),
-                    modifier = Modifier.align(Alignment.Center).offset(y = (-120).dp).scale(pop.value))
+                OutlinedText(if (max) "MAX x5!" else "x" + multText(m), style = if (max) Type.Huge.copy(fontSize = 60.sp) else Type.Huge, outlineWidth = 8.dp,
+                    brush = Brush.verticalGradient(if (max) listOf(Color(0xFFFFB3E0), Palette.Gold, Palette.Mint) else listOf(Color(0xFFFFF3B0), Palette.Gold)),
+                    // up in the sky, clear of Pip (the camera frames Pip around the middle of the screen)
+                    modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 92.dp).scale(pop.value))
             }
         }
         if (lost && result == null) {
@@ -255,7 +268,7 @@ fun RaceScreen(level: Int, boosters: Set<String>) {
         if (paused && result == null) PauseDialog(
             onResume = { paused = false; ctrl.paused = false },
             onRestart = { paused = false; nav.startRace(level, emptySet()) },
-            onHome = { paused = false; nav.tab = Tab.HOME; nav.replaceAll(Screen.Main) },
+            onHome = { paused = false; com.ngstudio.snowrace.analytics.Telemetry.levelQuit(level); nav.tab = Tab.HOME; nav.replaceAll(Screen.Main) },
         )
         result?.let { r ->
             ResultOverlay(r,
@@ -370,12 +383,14 @@ private fun PowerChip(icon: Int, left: Float, max: Float) {
 @Composable
 private fun PopupLayer(popups: MutableList<Popup>) {
     var now by remember { mutableLongStateOf(System.nanoTime()) }
-    LaunchedEffect(Unit) { while (true) withFrameNanos { now = System.nanoTime() } }
+    // tick only while popups are on screen (an idle per-frame loop recomposed this layer 60x a second)
+    val active = popups.isNotEmpty()
+    LaunchedEffect(active) { if (active) while (true) withFrameNanos { now = System.nanoTime() } }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val w = maxWidth; val h = maxHeight
         val dead = ArrayList<Popup>()
         for (p in popups) {
-            val t = (now - p.born) / 1e9f
+            val t = ((now - p.born) / 1e9f).coerceAtLeast(0f) // `now` can lag a new popup by one frame
             if (t > 1.2f) { dead += p; continue }
             val rise = (t * 70f).dp
             val a = if (t < 0.85f) 1f else 1f - (t - 0.85f) / 0.35f
@@ -494,9 +509,14 @@ private fun ResultOverlay(r: RaceResult, onNext: () -> Unit, onRetry: () -> Unit
         c.audio.play(Sfx.COIN)
     }
     LaunchedEffect(total) { if (coinsShown > 0) coinsShown = total }
-    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x661E1B4B), Color(0xE61E1B4B)))), contentAlignment = Alignment.Center) {
+    // Title on top, card at the bottom, and a clear band in between where Pip celebrates (the camera frames it there).
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+        0f to Color(0x991E1B4B), 0.24f to Color(0x331E1B4B), 0.36f to Color.Transparent,
+        0.5f to Color.Transparent, 0.6f to Color(0xB31E1B4B), 1f to Color(0xEE1E1B4B),
+    ))) {
         Column(
-            Modifier.padding(horizontal = 18.dp).graphicsLayer { val v = enter.value; scaleX = 0.7f + 0.3f * v; scaleY = 0.7f + 0.3f * v; alpha = v.coerceIn(0f, 1f) },
+            Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 18.dp, vertical = 8.dp)
+                .graphicsLayer { val v = enter.value; scaleX = 0.7f + 0.3f * v; scaleY = 0.7f + 0.3f * v; alpha = v.coerceIn(0f, 1f) },
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             val title = when {
@@ -512,10 +532,10 @@ private fun ResultOverlay(r: RaceResult, onNext: () -> Unit, onRetry: () -> Unit
                 for (s in 1..3) {
                     val on = s <= starsShown
                     val sc by animateFloatAsState(if (on) 1f else 0.85f, spring(dampingRatio = 0.35f, stiffness = 400f), label = "star")
-                    UiIcon(if (on) R.drawable.ui_star else R.drawable.ui_star_empty, if (s == 2) 92.dp else 72.dp, Modifier.scale(sc).offset(y = if (s == 2) (-10).dp else 0.dp))
+                    UiIcon(if (on) R.drawable.ui_star else R.drawable.ui_star_empty, if (s == 2) 76.dp else 60.dp, Modifier.scale(sc).offset(y = if (s == 2) (-8).dp else 0.dp))
                 }
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.weight(1f).heightIn(min = 120.dp))
             Panel(Modifier.fillMaxWidth()) {
                 ResultRow(R.drawable.ui_trophy, "Finish reward", "${r.baseCoins}")
                 if (r.multiplier > 1f) ResultRow(R.drawable.ui_snowball, "Finale multiplier", "x" + multText(r.multiplier))
@@ -533,6 +553,7 @@ private fun ResultOverlay(r: RaceResult, onNext: () -> Unit, onRetry: () -> Unit
                     Spacer(Modifier.height(8.dp))
                     GameButton("x3 Coins", onClick = {
                         c.ads.showRewarded("triple_coins") { ok ->
+                            com.ngstudio.snowrace.analytics.Telemetry.rewardedAd("triple_coins", ok)
                             if (ok) {
                                 bonusClaimed = true
                                 c.save.update { GameRules.addCoins(it, r.totalCoins * 2) }
@@ -544,7 +565,7 @@ private fun ResultOverlay(r: RaceResult, onNext: () -> Unit, onRetry: () -> Unit
                     }, modifier = Modifier.fillMaxWidth(), colors = Buttons.Gold, icon = R.drawable.ui_ad, height = 52.dp, shine = true)
                 }
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(10.dp))
             if (r.cleared && r.level < MAX_LEVEL) {
                 GameButton("Next Level", onClick = onNext, modifier = Modifier.fillMaxWidth(), colors = Buttons.Green, icon = R.drawable.ui_play, shine = true)
                 Spacer(Modifier.height(8.dp))
@@ -559,8 +580,8 @@ private fun ResultOverlay(r: RaceResult, onNext: () -> Unit, onRetry: () -> Unit
 
 @Composable
 private fun ResultRow(icon: Int, label: String, value: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-        UiIcon(icon, 30.dp)
+    Row(Modifier.fillMaxWidth().padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
+        UiIcon(icon, 26.dp)
         Spacer(Modifier.width(8.dp))
         BodyText(label, style = Type.Body, modifier = Modifier.weight(1f))
         BodyText(value, style = Type.Label, color = Palette.Navy)

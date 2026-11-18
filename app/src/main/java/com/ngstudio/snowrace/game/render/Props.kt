@@ -18,7 +18,8 @@ object Props {
     fun box() = MeshBuilder().box().build()
 
     /** Clumpy snowball: displaced icosphere. */
-    fun snowball() = MeshBuilder().icosphere(3, noise = 0.035f, seed = 7).build(instanced = false)
+    /** Chunky faceted snowball (flat-shaded lumps read crisply at any size). */
+    fun snowball() = MeshBuilder().icosphere(2, noise = 0.07f, seed = 7, flat = true).build(instanced = false)
     fun smoothBall() = MeshBuilder().sphere(28, 20).build(instanced = false)
 
     fun pine(): Mesh {

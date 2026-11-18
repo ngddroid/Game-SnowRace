@@ -7,7 +7,10 @@ enum class QualityTier { LOW, MEDIUM, HIGH }
 
 /** Everything GL that lives as long as the EGL context: programs, atlases, shared meshes. */
 class RenderResources(val context: Context, val tier: QualityTier) {
+    /** 4-tap soft shadow edges on high tier only; medium uses hardware 2x2 PCF (keeps the GPU under budget). */
     val soft = tier == QualityTier.HIGH
+    /** Ink outlines are off for the clean "crystal" look; flip on for a cartoon style. */
+    val outlines = false
     val lit = ShaderProgram("lit", Shaders.litVs(false), Shaders.litFs(false, soft))
     val outline = ShaderProgram("outline", Shaders.litVs(true), Shaders.litFs(true, false))
     val depth = ShaderProgram("depth", Shaders.depthVs(), Shaders.depthFs())
@@ -38,6 +41,46 @@ class RenderResources(val context: Context, val tier: QualityTier) {
 
     private val skyVao: Int
     val identity = FloatArray(16).also { com.ngstudio.snowrace.core.Mat4.identity(it) }
+
+    /** Tileable caustic-cell texture for the "crystal" water (baked once: 2 texture reads per pixel instead of 18 cell searches). */
+    val causticsTex: Int = Caustics.bake()
+
+    // ---- prop meshes are built once per GL context and reused by every scene (no rebuild on level load)
+    private val batchCache = HashMap<String, InstanceBatch>()
+
+    /** A shared, cleared instance batch for a prop. Only one scene is alive at a time, so sharing is safe. */
+    fun prop(key: String): InstanceBatch {
+        val b = batchCache.getOrPut(key) { InstanceBatch(makeProp(key), 64) }
+        b.clear()
+        return b
+    }
+
+    /** A shared, cleared batch for a scene-specific static mesh built by [make] on first use. */
+    fun custom(key: String, make: () -> Mesh): InstanceBatch {
+        val b = batchCache.getOrPut(key) { InstanceBatch(make(), 8) }
+        b.clear()
+        return b
+    }
+
+    private fun makeProp(key: String): Mesh = when (key) {
+        "pine" -> Props.pine(); "rock" -> Props.rock(5); "crystal" -> Props.crystal(); "snowman" -> Props.snowman()
+        "lantern" -> Props.lantern(); "candy" -> Props.candyCane(); "crate" -> Props.crate(); "barrel" -> Props.barrel()
+        "cabin" -> Props.cabin(); "mountain" -> Props.mountain(); "island" -> Props.island(); "tower" -> Props.tower()
+        "flag" -> Props.flagPole(); "balloon" -> Props.balloon(); "step" -> Props.step(); "box" -> Props.roundedBox()
+        "icicle" -> Props.icicle(); "marker" -> Props.marker(); "floe" -> Props.iceFloe(); "block" -> Props.block()
+        "log" -> Props.log(); "plow" -> Props.plow(); "penguin" -> Props.penguin(); "bumper" -> Props.bumper()
+        "vent" -> Props.steamVent(); "gift" -> Props.gift(); "quad" -> Props.quad(); "bigsnow" -> Props.sphere(14)
+        else -> error("unknown prop $key")
+    }
+
+    /** Builds every prop mesh up front (runs during the studio intro, so no level ever pays for it). */
+    fun prewarm() {
+        for (k in listOf(
+            "pine", "rock", "crystal", "snowman", "lantern", "candy", "crate", "barrel", "cabin", "mountain", "island", "tower",
+            "flag", "balloon", "step", "box", "icicle", "marker", "floe", "block", "log", "plow", "penguin", "bumper", "vent",
+            "gift", "quad", "bigsnow",
+        )) prop(k)
+    }
 
     init {
         skyVao = Gl.genVao()
@@ -135,6 +178,9 @@ class RenderResources(val context: Context, val tier: QualityTier) {
     }
 
     fun release() {
+        for (b in batchCache.values) b.mesh.release()
+        batchCache.clear()
+        TextureUtil.delete(causticsTex)
         shadow.release()
         TextureUtil.delete(particleAtlas.texture)
         TextureUtil.delete(iconAtlas.texture)

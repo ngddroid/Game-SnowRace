@@ -51,6 +51,9 @@ sounds should be balanced in-game via playback volume.
 | `sfx_pop.wav` | one-shot | 0.080 | -1.0 | Bubble pop. |
 | `sfx_ice_crack.wav` | one-shot | 0.420 | -1.0 | Sharp ice crack with follow-up cracks, icy ring and a frozen-lake "pew". |
 | `sfx_finale_step.wav` | one-shot | 0.260 | -1.0 | Bright marimba C5 note (game pitches it up per stair step). |
+| `sfx_bonk_heavy.wav` | one-shot | 0.620 | -1.0 | Knock-out hit: deep thud, snow crunch burst and a low rubbery boing. |
+| `sfx_bridge_done.wav` | one-shot | 0.850 | -1.0 | Bridge crossed: rising G-major glockenspiel arpeggio with sparkles. |
+| `sfx_finale_max.wav` | one-shot | 2.200 | -1.0 | Top finale step (x5): brass flourish into a held C-major chord, timpani, crash, bell shower. |
 | `music_menu.wav` | music loop | 38.400 | -1.5 | Cozy winter theme, F major, 100 bpm, 16 bars: celesta lead, Karplus-Strong harp arpeggios, soft pad, sine bass, shaker, sleigh bells. |
 | `music_race.wav` | music loop | 27.429 | -1.5 | Upbeat race theme, G major, 140 bpm, 16 bars: plucky lead hook, glockenspiel double, driving bass, four-on-the-floor kit, offbeat stabs, sleigh bells. |
 | `music_boss.wav` | music loop | 25.600 | -1.5 | Tense-but-fun chase, E minor, 150 bpm, 16 bars: staccato saw-string stabs, galloping bass, minor riff, tom fills, sleigh bells. |
@@ -58,4 +61,4 @@ sounds should be balanced in-game via playback volume.
 Music loop lengths are sample-exact: menu 64 beats x 13230 = 846720 samples (38.400 s),
 race 64 x 9450 = 604800 samples (27.429 s), boss 64 x 8820 = 564480 samples (25.600 s).
 
-Total: 38 files, 4.71 MB.
+Total: 41 files, 4.86 MB.

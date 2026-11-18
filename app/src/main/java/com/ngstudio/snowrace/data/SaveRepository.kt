@@ -60,6 +60,12 @@ class SaveRepository(context: Context) {
         }
     }
 
+    /** Writes right now on the calling thread (before the process is about to be replaced, e.g. an app update). */
+    fun flushBlocking() {
+        pending?.cancel()
+        writeNow()
+    }
+
     fun flush() {
         pending?.cancel()
         scope.launch { writeNow() }
@@ -78,6 +84,18 @@ class SaveRepository(context: Context) {
                 Log.e("SaveRepository", "Save failed", t)
             }
         }
+    }
+
+    companion object {
+        /**
+         * Reads the save without creating a repository (for background work such as notifications, which can run
+         * in a fresh process where the game itself never starts). Returns null if there is no readable save yet.
+         */
+        fun peek(context: Context): SaveData? = try {
+            val f = AtomicFile(File(context.filesDir, "save.json"))
+            if (!f.baseFile.exists()) null
+            else Json { ignoreUnknownKeys = true; coerceInputValues = true }.decodeFromString(SaveData.serializer(), f.readFully().decodeToString())
+        } catch (_: Throwable) { null }
     }
 
     fun resetAll() {

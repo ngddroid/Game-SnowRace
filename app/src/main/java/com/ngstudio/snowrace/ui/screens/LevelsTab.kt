@@ -234,7 +234,7 @@ fun LockedLevelDialog(level: Int, current: Int, onClose: () -> Unit, onUnlocked:
                 BodyText("Watch a short ad to unlock this level right now!", align = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(16.dp))
                 GameButton("Watch Ad", onClick = {
-                    c.ads.showRewarded("unlock_level_$level") { ok -> if (ok) onUnlocked() else onClose() }
+                    c.ads.showRewarded("unlock_level_$level") { ok -> com.ngstudio.snowrace.analytics.Telemetry.rewardedAd("unlock_level", ok); if (ok) onUnlocked() else onClose() }
                 }, modifier = Modifier.fillMaxWidth(), colors = Buttons.Gold, icon = R.drawable.ui_ad, shine = true)
                 Spacer(Modifier.height(8.dp))
                 BodyText("Not now", color = Palette.Muted, style = Type.Label, modifier = Modifier.pressable(onClick = onClose).padding(8.dp))

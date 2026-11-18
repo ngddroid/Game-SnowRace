@@ -63,42 +63,52 @@ class RaceScene(
 
     // ---- static batches
     private val platform: InstanceBatch
-    private val pines = InstanceBatch(Props.pine(), 96)
-    private val rocks = InstanceBatch(Props.rock(5), 48)
-    private val crystals = InstanceBatch(Props.crystal(), 24)
-    private val snowmen = InstanceBatch(Props.snowman(), 16)
-    private val lanterns = InstanceBatch(Props.lantern(), 24)
-    private val candies = InstanceBatch(Props.candyCane(), 24)
-    private val crates = InstanceBatch(Props.crate(), 16)
-    private val barrels = InstanceBatch(Props.barrel(), 16)
-    private val cabins = InstanceBatch(Props.cabin(), 8)
-    private val mountains = InstanceBatch(Props.mountain(), 24)
-    private val islands = InstanceBatch(Props.island(), 32)
-    private val towers = InstanceBatch(Props.tower(), 12)
-    private val flags = InstanceBatch(Props.flagPole(), 32)
-    private val balloons = InstanceBatch(Props.balloon(), 24)
-    private val steps = InstanceBatch(Props.step(), 8)
-    private val boxes = InstanceBatch(Props.roundedBox(), 32)
-    private val icicles = InstanceBatch(Props.icicle(), 512)
-    private val markers = InstanceBatch(Props.marker(), 96)
+    private val pines = res.prop("pine")
+    private val rocks = res.prop("rock")
+    private val crystals = res.prop("crystal")
+    private val snowmen = res.prop("snowman")
+    private val lanterns = res.prop("lantern")
+    private val candies = res.prop("candy")
+    private val crates = res.prop("crate")
+    private val barrels = res.prop("barrel")
+    private val cabins = res.prop("cabin")
+    private val mountains = res.prop("mountain")
+    private val islands = res.prop("island")
+    private val towers = res.prop("tower")
+    private val flags = res.prop("flag")
+    private val balloons = res.prop("balloon")
+    private val steps = res.prop("step")
+    private val boxes = res.prop("box")
+    private val icicles = res.prop("icicle")
+    private val markers = res.prop("marker")
     private val staticBatches: List<InstanceBatch>
 
     // ---- dynamic batches
-    private val floes = InstanceBatch(Props.iceFloe(), 40)
-    private val blocks = InstanceBatch(Props.block(), 512)
-    private val logs = InstanceBatch(Props.log(), 8)
-    private val plows = InstanceBatch(Props.plow(), 8)
-    private val penguins = InstanceBatch(Props.penguin(), 24)
-    private val bumpers = InstanceBatch(Props.bumper(), 12)
-    private val vents = InstanceBatch(Props.steamVent(), 12)
-    private val gifts = InstanceBatch(Props.gift(), 16)
-    private val quads = InstanceBatch(Props.quad(), 64)
-    private val bigSnow = InstanceBatch(Props.sphere(14), 64)
+    private val floes = res.prop("floe")
+    private val blocks = res.prop("block")
+    private val logs = res.prop("log")
+    private val plows = res.prop("plow")
+    private val penguins = res.prop("penguin")
+    private val bumpers = res.prop("bumper")
+    private val vents = res.prop("vent")
+    private val gifts = res.prop("gift")
+    private val quads = res.prop("quad")
+    private val bigSnow = res.prop("bigsnow")
+    /** Start banner: dynamic so it can lift out of the follow camera's view when the race starts. */
+    private val gate = res.custom("race.gate") { Props.roundedBox() }
     private val dynamicBatches: List<InstanceBatch>
 
     private val floeData = ArrayList<FloatArray>() // x, z, scale, yaw, phase
     private val clouds = ArrayList<FloatArray>()   // x, y, z, size
-    private val spectators = ArrayList<FloatArray>() // x, z, yaw, lookIndex, phase
+    private val spectators = ArrayList<FloatArray>() // x, z, yaw, lookIndex, phase, y, scale
+    /** When Pip reached each finale step (-1 = not yet): reached steps light up. */
+    private val stepLitAt = FloatArray(Course.STEPS + 1) { -1f }
+    private var lastKoAt = -10f
+    // grandstands beside the finish platform (over the water, clear of the track)
+    private val standInner = halfW + 0.9f
+    private val standOuter = standInner + STAND_TIERS * STAND_TIER_W
+    private val standZ0 = course.finish.z0 + 0.4f
+    private val standZ1 = course.finish.z1 - 0.4f
     private val spectatorLooks = Catalog.rivalCharacters.shuffled(java.util.Random(spec.seed))
 
     // ---- terrain & water
@@ -112,7 +122,7 @@ class RaceScene(
 
     // ---- fx
     private val fx = ParticleSystem(if (res.tier == QualityTier.LOW) 900 else 1800)
-    private val flakeCount = when (spec.weather) { Weather.CLEAR -> 70; Weather.SNOW -> 220; Weather.BLIZZARD -> 420 } / (if (res.tier == QualityTier.LOW) 2 else 1)
+    private val flakeCount = when (spec.weather) { Weather.CLEAR -> 36; Weather.SNOW -> 120; Weather.BLIZZARD -> 260 } / (if (res.tier == QualityTier.LOW) 2 else 1)
     private val flakes = FloatArray(flakeCount * 4)
     private val falling = ArrayList<FloatArray>() // x,y,z,vy,rot,color
 
@@ -138,6 +148,7 @@ class RaceScene(
     private var landTimer = 0f
     private var lastBridgeVersion = -1
     private var playerFinishedFx = false
+    private var frameDt = 1f / 60f
     private val basis = FloatArray(2)
     private val basis2 = FloatArray(2)
 
@@ -147,7 +158,7 @@ class RaceScene(
         val packed = rgbToInt(light.snowPacked)
         val cliff = rgbToInt(light.cliff)
         fun slab(z0: Float, z1: Float, y: Float, x0: Float = -halfW - 0.12f, x1: Float = halfW + 0.12f, top: Int = packed) =
-            addSlab(md, x0, x1, y, RaceSim.WATER_Y - 3f, z0, z1, top, MeshBuilder.shade(cliff, 1.18f), MeshBuilder.shade(cliff, 0.55f))
+            addSlab(md, x0, x1, y, RaceSim.WATER_Y - 3f, z0, z1, top, MeshBuilder.mix(cliff, 0xFFFFFF, 0.72f), MeshBuilder.mix(cliff, 0x7FA6CF, 0.45f))
         slab(course.start.z0, course.start.z1, 0f)
         for (f in course.fields) slab(f.z0, f.z1, f.y0)
         slab(course.finish.z0, course.finish.z1, course.finishY)
@@ -186,6 +197,21 @@ class RaceScene(
         }
         // start line
         lip.color(0xFFFFFF).at(0f, 0.012f, -0.7f, scx = halfW * 2f, scy = 1f, scz = 0.25f).quadXZ()
+        // grandstands: an ice pier on each side with three tiers of seats and a backrest
+        val seatTops = intArrayOf(MeshBuilder.mix(accent, 0xFFFFFF, 0.55f), 0xEAF6FF, MeshBuilder.mix(0x5EC8FF, 0xFFFFFF, 0.5f))
+        for (side in SIDES) {
+            fun xr(a: Float, b: Float) = if (side > 0) a to b else -b to -a
+            val (bx0, bx1) = xr(standInner, standOuter)
+            addSlab(md, bx0, bx1, course.finishY - 0.05f, RaceSim.WATER_Y - 3f, standZ0, standZ1, packed,
+                MeshBuilder.mix(cliff, 0xFFFFFF, 0.72f), MeshBuilder.mix(cliff, 0x7FA6CF, 0.45f))
+            for (t in 0 until STAND_TIERS) {
+                val (tx0, tx1) = xr(standInner + t * STAND_TIER_W, standOuter)
+                addSlab(md, tx0, tx1, course.finishY + 0.22f + t * STAND_TIER_RISE, course.finishY - 0.05f, standZ0, standZ1,
+                    seatTops[t], 0xF4FAFF, 0xC9DCF0)
+            }
+            val (wx0, wx1) = xr(standOuter - 0.16f, standOuter)
+            addSlab(md, wx0, wx1, course.finishY + 3.05f, course.finishY - 0.05f, standZ0, standZ1, 0xFFFFFF, 0xEAF6FF, 0xC9DCF0)
+        }
         platform = InstanceBatch(Mesh(md, true), 1)
         Inst.add(platform, 0f, 0f, 0f, outline = 0f)
 
@@ -207,7 +233,6 @@ class RaceScene(
         // ---------------- start / finish decor
         val gateZ = -0.35f
         for (sx in listOf(-1f, 1f)) Inst.add(towers, sx * (halfW + 0.35f), 0f, gateZ, sx = 0.85f, sy = 0.95f, sz = 0.85f)
-        Inst.add(boxes, 0f, 3.55f, gateZ, sx = halfW * 2f + 1f, sy = 0.62f, sz = 0.25f, color = 0x5EC8FF, gloss = 0.3f)
         for (sx in listOf(-1f, 1f)) Inst.add(towers, sx * (halfW + 0.45f), course.finishY, course.finishLineZ)
         Inst.add(boxes, 0f, course.finishY + 3.55f, course.finishLineZ, sx = halfW * 2f + 1.4f, sy = 0.9f, sz = 0.3f, color = accent, gloss = 0.3f)
         val balloonColors = intArrayOf(0xFF4D8D, 0x3DF5C8, 0xFFC83D, 0x5EC8FF, 0xB46CFF)
@@ -216,19 +241,32 @@ class RaceScene(
             Inst.add(balloons, sx * (halfW + rng.range(0.6f, 1.6f)), course.finishY + rng.range(2.4f, 4.4f), course.finishLineZ + rng.range(-1.2f, 1.2f),
                 sway = 1.5f, color = balloonColors[i % balloonColors.size], gloss = 0.9f)
         }
-        // bunting poles along finish platform
+        // bunting poles along both sides of the finish platform
         var fz = course.finish.z0 + 1f
         while (fz < course.finish.z1) {
-            // left side only: the finale camera looks in from the right
-            Inst.add(flags, -(halfW - 0.15f), course.finishY, fz, yaw = 0f, sway = 1.2f, color = balloonColors[rng.nextInt(balloonColors.size)])
+            for (side in SIDES) Inst.add(flags, side * (halfW - 0.15f), course.finishY, fz, yaw = 0f, sway = 1.2f, color = balloonColors[rng.nextInt(balloonColors.size)])
             fz += 2.6f
         }
-        // finale steps
-        val stepColors = intArrayOf(0x5EC8FF, 0x3DF5C8, 0xFFC83D, 0xFF7A45, 0xFF4D8D)
-        for (k2 in 1..Course.STEPS) {
-            val top = course.finishY + k2 * Course.STEP_RISE
-            Inst.add(steps, 0f, top - 1.5f, course.stepZ0(k2) + Course.STEP_DEPTH / 2f, sx = halfW * 1.7f, sy = 3f, sz = Course.STEP_DEPTH, color = stepColors[k2 - 1], gloss = 0.35f)
+        // grandstand decor: striped canopy, pennants on the roof, balloon bunches at the ends
+        for (side in SIDES) {
+            var cz = standZ0 + 0.5f
+            var k3 = 0
+            while (cz < standZ1 - 0.2f) {
+                Inst.add(boxes, side * (standOuter - 0.95f), course.finishY + 3.05f, cz, roll = side * 0.16f,
+                    sx = 1.95f, sy = 0.12f, sz = 1.0f, color = if (k3 % 2 == 0) accent else 0xFFFFFF, gloss = 0.3f)
+                cz += 1.0f; k3++
+            }
+            var pz = standZ0 + 0.8f
+            while (pz < standZ1) {
+                Inst.add(flags, side * (standOuter - 0.1f), course.finishY + 3.1f, pz, sway = 1.4f, sx = 0.7f, sy = 0.7f, sz = 0.7f, color = balloonColors[rng.nextInt(balloonColors.size)])
+                pz += 2.2f
+            }
+            for (bz in floatArrayOf(standZ0 + 0.3f, standZ1 - 0.3f)) for (b in 0 until 3) {
+                Inst.add(balloons, side * (standInner + 0.25f + b * 0.3f), course.finishY + rng.range(2.3f, 3.4f), bz + rng.range(-0.3f, 0.3f),
+                    sway = 1.5f, color = balloonColors[rng.nextInt(balloonColors.size)], gloss = 0.9f)
+            }
         }
+        // finale steps are filled every frame in fillDynamic (they light up as Pip reaches them)
         // plaza castle + trophy
         val plazaY = course.finishY + Course.STEPS * Course.STEP_RISE
         for (sx in listOf(-1f, 1f)) Inst.add(towers, sx * (halfW - 0.8f), plazaY, course.finale.z1 - 0.5f, sx = 1.25f, sy = 1.4f, sz = 1.25f)
@@ -276,10 +314,19 @@ class RaceScene(
             // a few floes inside the gaps (outside the track) for life
             for (i in 0 until 2) floeData += floatArrayOf((if (rng.chance(0.5f)) -1f else 1f) * (halfW + rng.range(0.8f, 3f)), rng.range(g.z0 + 0.5f, g.z1 - 0.5f), rng.range(0.3f, 0.6f), rng.range(0f, TAU), rng.range(0f, TAU))
         }
-        for (i in 0 until 14) clouds += floatArrayOf(rng.range(-140f, 140f), rng.range(28f, 60f), rng.range(course.start.z0, course.finale.z1 + 160f), rng.range(25f, 55f))
-        for (i in 0 until 6) {
-            val row = i % 2
-            spectators += floatArrayOf(-(halfW - 0.7f - row * 0.95f), course.finish.z0 + 1.3f + (i / 2) * 2.2f + row * 0.9f, PI_F / 2 + 0.25f, i.toFloat(), rng.range(0f, 3f))
+        // high enough that the intro fly-over never passes through one
+        for (i in 0 until 14) clouds += floatArrayOf(rng.range(-140f, 140f), rng.range(48f, 74f), rng.range(course.start.z0, course.finale.z1 + 160f), rng.range(25f, 50f))
+        var look = 0
+        val tiersUsed = if (res.tier == QualityTier.LOW) intArrayOf(0) else intArrayOf(0, 2)
+        for (side in SIDES) for (t in tiersUsed) {
+            var sz = standZ0 + 0.7f + (if (t == 2) 0.75f else 0f)
+            while (sz < standZ1 - 0.4f) {
+                spectators += floatArrayOf(
+                    side * (standInner + t * STAND_TIER_W + 0.42f), sz, side * -(PI_F / 2 + 0.2f), (look++).toFloat(), rng.range(0f, 6f),
+                    course.finishY + 0.22f + t * STAND_TIER_RISE, rng.range(0.84f, 0.96f),
+                )
+                sz += 1.5f
+            }
         }
 
         // icicles hanging under every platform edge that faces a gap, plus marker poles along the track sides
@@ -304,8 +351,8 @@ class RaceScene(
                 mz += 3.2f; k2++
             }
         }
-        staticBatches = listOf(platform, pines, rocks, crystals, snowmen, lanterns, candies, crates, barrels, cabins, mountains, islands, towers, flags, balloons, steps, boxes, icicles, markers)
-        dynamicBatches = listOf(floes, blocks, logs, plows, penguins, bumpers, vents, gifts, quads, bigSnow)
+        staticBatches = listOf(platform, pines, rocks, crystals, snowmen, lanterns, candies, crates, barrels, cabins, mountains, islands, towers, flags, balloons, boxes, icicles, markers)
+        dynamicBatches = listOf(floes, blocks, logs, plows, penguins, bumpers, vents, gifts, quads, bigSnow, gate, steps)
 
         // ---------------- terrain, water, land mask
         terrains = sim.fields.map { TerrainMesh(it) }
@@ -314,7 +361,13 @@ class RaceScene(
             val seg = course.locate(z)
             seg.kind != SegKind.GAP && z >= course.start.z0 && z <= course.finale.z1 + 4f && abs(x) <= halfW + 0.1f
         }
+        // no ice floes inside the grandstands; foam rings the stands like any other land
+        floeData.removeAll { abs(it[0]) < standOuter + 1.4f && it[1] > standZ0 - 1.5f && it[1] < standZ1 + 1.5f }
         for (f in floeData) land.stamp(f[0], f[1], f[2] * 0.9f)
+        for (side in SIDES) {
+            var sz = standZ0
+            while (sz <= standZ1) { land.stamp(side * (standInner + standOuter) / 2f, sz, (standOuter - standInner) / 2f + 0.1f); sz += 0.5f }
+        }
         rebuildLand()
 
         // ---------------- labels
@@ -328,19 +381,26 @@ class RaceScene(
         text = TextAtlas(context, labels, highlightFirst = true)
 
         for (i in 0 until flakeCount) {
-            flakes[i * 4] = rng.range(-14f, 14f); flakes[i * 4 + 1] = rng.range(0f, 14f); flakes[i * 4 + 2] = rng.range(-6f, 24f); flakes[i * 4 + 3] = rng.range(0f, TAU)
+            flakes[i * 4] = rng.range(-14f, 14f); flakes[i * 4 + 1] = rng.range(0f, 14f); flakes[i * 4 + 2] = rng.range(-1f, 24f); flakes[i * 4 + 3] = rng.range(0f, TAU)
         }
         // initial camera: high above the finish looking back
-        camX = halfW + 7f; camY = course.finishY + 9f; camZ = course.finishLineZ + 9f
+        camX = introX(); camY = introY(); camZ = introZ()
         lookX = 0f; lookY = course.finishY + 1f; lookZ = course.finishLineZ - 6f
         Gl.check("RaceScene.init")
     }
 
     private fun accentTint(c: Int) = MeshBuilder.mix(c, accent, 0.25f)
 
+    // opening shot: high above the plaza behind the finale stairs, looking back over the finish, both stands and the course
+    // off to the right so the mid-flight top-down moment shows the track edge and water, not a wall of white snow
+    private fun introX() = halfW + 6f
+    private fun introY() = course.finishY + Course.STEPS * Course.STEP_RISE + 9.5f
+    private fun introZ() = course.finale.z1 + 1.5f
+
     // =========================================================================== update
     override fun update(dt: Float) {
         val realDt = dt
+        frameDt = dt.coerceIn(1f / 240f, 0.05f)
         val simDt = if (slowMo > 0f) { slowMo -= realDt; realDt * 0.35f } else realDt
         time += realDt
         res.time = time
@@ -352,18 +412,24 @@ class RaceScene(
             var remaining = simDt.coerceAtMost(0.05f)
             while (remaining > 1e-4f) {
                 val step = min(remaining, 1f / 60f)
-                ctrl.step(step)
+                Prof.start(); ctrl.step(step); Prof.end(Prof.SIM)
                 remaining -= step
-                handleEvents()
+                handleEvents(); Prof.end(Prof.EVENTS)
             }
-            fx.update(simDt) { x, z -> groundY(x, z) }
+            Prof.start()
+            fx.update(simDt, groundFn)
             updateFalling(simDt)
+            Prof.end(Prof.FX)
         }
+        Prof.start()
         updateCamera(realDt)
         updateAudioLoops()
+        Prof.end(Prof.CAM)
         landTimer -= realDt
         val v = sim.bridges.sumOf { it.version }
-        if (v != lastBridgeVersion && landTimer <= 0f) { rebuildLand(); lastBridgeVersion = v; landTimer = 0.25f }
+        if (v != lastBridgeVersion && landTimer <= 0f && requestLand()) { lastBridgeVersion = v; landTimer = 0.2f }
+        land.uploadIfReady()
+        Prof.end(Prof.LAND)
     }
 
     private fun rebuildLand() {
@@ -373,6 +439,21 @@ class RaceScene(
         }
         land.finishRebuild()
     }
+
+    /** Snapshots the bridge cells and blurs the shore mask on a worker thread (was a 7-13 ms hitch on the GL thread). */
+    private val landFill: (FloatArray) -> Int = fill@{ arr ->
+        var n = 0
+        for (b in sim.bridges) for (r in 0 until b.rows) for (c in 0 until b.cols) {
+            if (b.state[b.idx(c, r)] == BridgeGrid.EMPTY) continue
+            if (n * 2 + 1 >= arr.size) return@fill -1
+            arr[n * 2] = b.cellX(c); arr[n * 2 + 1] = b.cellZ(r); n++
+        }
+        n
+    }
+
+    private fun requestLand(): Boolean = land.requestAsync(landFill)
+
+    private val groundFn: (Float, Float) -> Float = { x, z -> groundY(x, z) }
 
     private fun groundY(x: Float, z: Float): Float {
         val seg = course.locate(z)
@@ -391,7 +472,17 @@ class RaceScene(
                 is SimEvent.Go -> { audio.play(Sfx.GO); haptics.play(Haptic.CLICK); ctrl.emit(UiEvent.Go) }
                 is SimEvent.Bonk -> {
                     val near = isNear(e.x, e.z)
-                    if (near) audio.play(Sfx.BONK, 0.9f, rng.range(0.9f, 1.15f))
+                    if (e.attacker == 0) {
+                        // knock-out: heavy hit, a beat of slow motion and a punch-in (not more than every 2.5 s)
+                        audio.play(Sfx.BONK_HEAVY, 1f, rng.range(0.94f, 1.06f))
+                        if (time - lastKoAt > 2.5f) {
+                            lastKoAt = time
+                            slowMo = max(slowMo, 0.42f)
+                            fov -= 5f
+                            audio.duckMusic(0.45f, 450)
+                        }
+                        burstStars(e.x, e.y + 0.3f, e.z, 6)
+                    } else if (near) audio.play(Sfx.BONK, 0.9f, rng.range(0.9f, 1.15f))
                     burstStars(e.x, e.y, e.z, 7)
                     snowChunks(e.x, e.y - 0.4f, e.z, (8 + e.lost / 40f).toInt().coerceAtMost(26))
                     if (e.victim == 0) {
@@ -454,11 +545,23 @@ class RaceScene(
                 is SimEvent.FinaleStep -> {
                     audio.play(Sfx.FINALE_STEP, 1f, 0.9f + e.step * 0.12f)
                     haptics.play(Haptic.CLICK)
+                    if (e.step in 1..Course.STEPS) stepLitAt[e.step] = time
+                    val stepCol = 0xFF000000.toInt() or STEP_COLORS[(e.step - 1).coerceIn(0, Course.STEPS - 1)]
                     sparkleBurst(e.x, e.y + 0.5f, e.z, 0xFFFFC83D.toInt(), 22)
+                    sparkleLine(e.z + 0.05f, e.y, stepCol, halfW * 0.85f)
+                    if (e.step == Course.STEPS) {
+                        // top step: fanfare, confetti cannons from both sides plus a centre burst
+                        audio.play(Sfx.FINALE_MAX); haptics.play(Haptic.SUCCESS)
+                        shake = max(shake, 0.35f)
+                        confetti(0f, e.y + 2.5f, e.z + 1f, 110)
+                        for (side in SIDES) confettiCannon(side * (halfW - 0.3f), e.y + 0.5f, e.z + 0.5f, -side, 70)
+                    }
                     ctrl.emit(UiEvent.FinaleStep(e.step, RaceSim.FINALE_MULT[e.step]))
                 }
                 is SimEvent.StageEnter -> if (e.racer == 0) {
-                    audio.play(Sfx.WHOOSH)
+                    // made it across a gap: chime and a sparkle line along the far edge of the bridge
+                    audio.play(Sfx.BRIDGE_DONE); haptics.play(Haptic.CLICK)
+                    course.gaps.getOrNull(e.stage - 1)?.let { g -> sparkleLine(g.z1 + 0.05f, g.y1, 0xFF000000.toInt() or accent, halfW) }
                     if (e.stage < spec.stages.size) ctrl.emit(UiEvent.Banner("Stage ${e.stage + 1}/${spec.stages.size}"))
                     else ctrl.emit(UiEvent.Banner("Final sprint!", "Race to the finish!"))
                 }
@@ -533,6 +636,30 @@ class RaceScene(
         fx.emit(x, y + 0.03f, z, 0f, 0f, 0f, 1.4f, 0.4f * scale, 2.2f * scale, 0xCCFFFFFF.toInt(), ParticleAtlas.RING, ground = true)
     }
 
+    /** Row of rising sparkles across the track (bridge crossed, finale step reached) plus a ground ring. */
+    private fun sparkleLine(z: Float, y: Float, color: Int, half: Float) {
+        var x = -half + 0.15f
+        var k = 0
+        while (x < half) {
+            // coloured stars (additive white vanishes against bright snow) with a soft glow behind each
+            val c = if (k % 2 == 0) color else 0xFFFFC83D.toInt()
+            fx.emit(x, y + 0.15f, z, 0f, rng.range(1.3f, 2.8f), rng.range(-0.25f, 0.25f), rng.range(0.8f, 1.2f), rng.range(0.3f, 0.42f), 0.08f,
+                c, ParticleAtlas.STAR, dragK = 2f, rotation = rng.range(0f, TAU), rotSpeed = rng.range(-4f, 4f))
+            if (k % 2 == 0) fx.emit(x, y + 0.3f, z, 0f, rng.range(1f, 2f), 0f, 0.6f, 0.5f, 0.1f, c, ParticleAtlas.GLOW, dragK = 2f, additive = true)
+            x += 0.3f; k++
+        }
+        fx.emit(0f, y + 0.05f, z, 0f, 0f, 0f, 0.6f, 0.6f, half * 2.2f, color, ParticleAtlas.RING, ground = true)
+    }
+
+    /** Confetti fired sideways from [x] towards [dir] (x5 celebration). */
+    private fun confettiCannon(x: Float, y: Float, z: Float, dir: Float, n: Int) {
+        val cols = intArrayOf(0xFFFF4D8D.toInt(), 0xFF3DF5C8.toInt(), 0xFFFFC83D.toInt(), 0xFF5EC8FF.toInt(), 0xFFB46CFF.toInt(), 0xFFFF7A45.toInt())
+        for (i in 0 until n) {
+            fx.emit(x, y, z + rng.range(-0.3f, 0.3f), dir * rng.range(2f, 6f), rng.range(5f, 10f), rng.range(-1.5f, 2.5f), rng.range(1.6f, 2.6f), 0.22f, 0.2f,
+                cols[i % cols.size], ParticleAtlas.SQUARE, gravity = 6f, dragK = 1.2f, rotation = rng.range(0f, TAU), rotSpeed = rng.range(-9f, 9f))
+        }
+    }
+
     private fun confetti(x: Float, y: Float, z: Float, n: Int) {
         val cols = intArrayOf(0xFFFF4D8D.toInt(), 0xFF3DF5C8.toInt(), 0xFFFFC83D.toInt(), 0xFF5EC8FF.toInt(), 0xFFB46CFF.toInt(), 0xFFFF7A45.toInt())
         for (i in 0 until n) {
@@ -561,17 +688,27 @@ class RaceScene(
         when (sim.phase) {
             Phase.INTRO -> {
                 val t = Easing.inOutSine(clamp01(sim.phaseT / sim.introDuration))
+                introT = t
                 val f0 = followPos(p, ballR); val fx0 = f0[0]; val fy0 = f0[1]; val fz0 = f0[2]
-                val sx = halfW + 7f; val sy = course.finishY + 9f; val sz = course.finishLineZ + 9f
-                camX = lerp(sx, fx0, t); camY = lerp(sy, fy0, t); camZ = lerp(sz, fz0, t)
+                val sx = introX(); val sy = introY(); val sz = introZ()
+                // arc up mid-flight: the camera turns through straight-down here, so show a wide overview, not a close-up
+                camX = lerp(sx, fx0, t); camY = lerp(sy, fy0, t) + sin(t * PI_F) * 9f; camZ = lerp(sz, fz0, t)
                 lookX = lerp(0f, p.x * 0.65f, t); lookY = lerp(course.finishY + 1f, p.y, t); lookZ = lerp(course.finishLineZ - 6f, p.z + 4f, t)
             }
-            Phase.FINALE, Phase.DONE -> if (p.state == RState.FINALE || p.finished) {
+            Phase.FINALE, Phase.DONE -> if (celebrating(p)) {
+                // hero shot: Pip turns to face this camera and sits in the clear band above the results card
+                camX = damp(camX, p.x + HERO_SIDE, 2.4f, dt)
+                camY = damp(camY, p.y + HERO_UP, 2.4f, dt)
+                camZ = damp(camZ, p.z - HERO_BACK, 2.4f, dt)
+                lookX = damp(lookX, p.x, 3f, dt); lookY = damp(lookY, p.y + HERO_LOOK_Y, 3f, dt); lookZ = damp(lookZ, p.z, 3f, dt)
+            } else if (p.state == RState.FINALE || p.finished) {
+                // finale run: track Pip from just behind and inside the track (the old side camera lost Pip
+                // off the right edge and looked through the finish balloons)
                 val tz = p.z + 1.5f
-                camX = damp(camX, halfW + 4.5f, 2.2f, dt)
-                camY = damp(camY, p.y + 4.2f, 2.2f, dt)
-                camZ = damp(camZ, tz - 6.5f, 2.2f, dt)
-                lookX = damp(lookX, 0f, 3f, dt); lookY = damp(lookY, p.y + 1.2f, 3f, dt); lookZ = damp(lookZ, tz + 1f, 3f, dt)
+                camX = damp(camX, p.x * 0.5f + 1.2f, 2.6f, dt)
+                camY = damp(camY, p.y + 4.4f, 2.6f, dt)
+                camZ = damp(camZ, tz - 7f, 2.6f, dt)
+                lookX = damp(lookX, p.x, 3f, dt); lookY = damp(lookY, p.y + 1.0f, 3f, dt); lookZ = damp(lookZ, tz + 1f, 3f, dt)
             }
             else -> {
                 val f0 = followPos(p, ballR); val fx0 = f0[0]; val fy0 = f0[1]; val fz0 = f0[2]
@@ -593,6 +730,8 @@ class RaceScene(
         val s = shake + avalancheRumble
         val sx = sin(time * 47f) * s * 0.3f; val sy = cos(time * 53f) * s * 0.25f
         fov = damp(fov, if (p.boostT > 0f) 61f else 55f, 4f, dt)
+        // widen the lens mid fly-over so the top-down moment still shows plenty of scenery
+        if (sim.phase == Phase.INTRO) fov = 55f + sin(introT * PI_F) * 16f
         cam.fovDeg = fov
         cam.x = camX + sx; cam.y = camY + sy; cam.z = camZ
         cam.tx = lookX + sx * 0.5f; cam.ty = lookY; cam.tz = lookZ
@@ -602,6 +741,7 @@ class RaceScene(
     }
 
     private val follow = FloatArray(3)
+    private var introT = 0f
 
     /** Writes the follow-camera position into [follow] (no per-frame allocation). */
     private fun followPos(p: Racer, ballR: Float): FloatArray {
@@ -637,18 +777,21 @@ class RaceScene(
         for (b in dynamicBatches) b.clear()
         res.chars.clear()
         res.ballCasters.clear()
+        Prof.start()
         fillDynamic()
         fillRacers()
+        Prof.end(Prof.FILL)
 
         // ---- shadow pass
         res.shadow.update(light.sunDir[0], light.sunDir[1], light.sunDir[2], p.x * 0.6f, p.y, p.z + 6f, 19f)
         if (res.beginShadowPass()) {
             for (b in staticBatches) if (b !== mountains && b !== islands) b.draw()
-            blocks.draw(); logs.draw(); plows.draw(); penguins.draw(); bumpers.draw(); gifts.draw(); bigSnow.draw()
+            blocks.draw(); logs.draw(); plows.draw(); penguins.draw(); bumpers.draw(); gifts.draw(); bigSnow.draw(); gate.draw(); steps.draw()
             for (b in res.chars.all()) b.draw()
             res.ballCasters.draw()
             res.endShadowPass()
         }
+        Prof.end(Prof.SHADOW)
 
         // ---- main pass
         GLES30.glViewport(0, 0, res.width, res.height)
@@ -670,12 +813,15 @@ class RaceScene(
         drawWater()
 
         // outlines (characters + balls + key props)
-        res.beginOutline(cam, light)
-        for (b in res.chars.all()) b.draw()
-        res.ballCasters.draw()
-        res.endOutline()
+        if (res.outlines) {
+            res.beginOutline(cam, light)
+            for (b in res.chars.all()) b.draw()
+            res.ballCasters.draw()
+            res.endOutline()
+        }
 
         res.drawSky(cam, light)
+        Prof.end(Prof.MAIN)
 
         // ---- transparent: billboards
         GLES30.glEnable(GLES30.GL_BLEND)
@@ -697,10 +843,30 @@ class RaceScene(
         GLES30.glDepthMask(true)
         GLES30.glDisable(GLES30.GL_BLEND)
         GLES30.glEnable(GLES30.GL_CULL_FACE)
+        Prof.end(Prof.BB)
+        Prof.tick()
     }
 
     private fun fillDynamic() {
         val t = time
+        // finale steps: muted until Pip reaches them, then lit with a flash and a soft pulse
+        for (k in 1..Course.STEPS) {
+            val top = course.finishY + k * Course.STEP_RISE
+            val base = STEP_COLORS[k - 1]
+            val litAt = stepLitAt[k]
+            val col: Int; val glow: Float
+            if (litAt >= 0f) {
+                val flash = clamp01(1f - (t - litAt) / 0.6f)
+                col = MeshBuilder.mix(base, 0xFFFFFF, 0.35f * flash)
+                glow = 0.3f + 0.55f * flash + 0.07f * sin(t * 5f + k)
+            } else {
+                col = MeshBuilder.mix(base, 0xB8C6DC, 0.5f); glow = 0f
+            }
+            Inst.add(steps, 0f, top - 1.5f, course.stepZ0(k) + Course.STEP_DEPTH / 2f, sx = halfW * 1.7f, sy = 3f, sz = Course.STEP_DEPTH,
+                color = col, gloss = 0.35f, emissive = glow)
+        }
+        val lift = gateLift()
+        if (lift < GATE_GONE) Inst.add(gate, 0f, 3.55f + lift, -0.35f, sx = halfW * 2f + 1f, sy = 0.62f, sz = 0.25f, color = 0x5EC8FF, gloss = 0.3f)
         // floes
         for (f in floeData) {
             val bob = sin(t * 1.3f + f[4]) * 0.05f
@@ -786,13 +952,21 @@ class RaceScene(
     }
 
     private fun fillRacers() {
-        val dt = 1f / 60f
+        val dt = frameDt
         sim.racers.forEachIndexed { i, r ->
-            visR[i] = damp(visR[i], if (r.hasBall && r.state != RState.FALL) r.ballR else 0f, 16f, dt)
+            // the climb is over: the leftover ball is spent (it must not roll on up the unpaid steps)
+            val heroNow = r.isPlayer && r.finished && r.finaleDone
+            if (heroNow && !heroPuffed && visR[i] > 0.05f) {
+                // the leftover snowball bursts into snow so it doesn't block the celebration shot
+                heroPuffed = true
+                snowChunks(r.ballX, ballY(r, i), r.ballZ, 18)
+                for (k in 0 until 10) fx.emit(r.ballX, ballY(r, i), r.ballZ, rng.range(-1.5f, 1.5f), rng.range(0.5f, 2f), rng.range(-1.5f, 1.5f), 0.7f, 0.5f, 1.1f, 0xFFFFFFFF.toInt(), ParticleAtlas.PUFF, dragK = 2.5f)
+            }
+            visR[i] = if (heroNow) 0f else damp(visR[i], if (r.hasBall && r.state != RState.FALL) r.ballR else 0f, 16f, dt)
             blinkT[i] -= dt
             if (blinkT[i] < -0.12f) blinkT[i] = rng.range(1.8f, 4.5f)
             val p = pose
-            p.x = r.x; p.y = r.y; p.z = r.z; p.yaw = r.heading
+            p.x = r.x; p.y = r.y + snowUnder(r) * FOOT_LIFT; p.z = r.z; p.yaw = r.heading
             p.move = r.moveAmt; p.phase = r.stepPhase; p.pushing = r.pushing && visR[i] > 0.05f; p.ballR = visR[i]
             p.lean = 0.08f * r.moveAmt + (if (p.pushing) 0.1f else 0f)
             p.roll = 0f; p.squash = r.squash; p.jump = 0f; p.armsUp = 0f; p.wave = 0f
@@ -810,11 +984,21 @@ class RaceScene(
                 RState.FINISHED -> {
                     if (r.moveAmt < 0.2f) { p.jump = abs(sin(time * 6.5f + i)) * 0.35f; p.armsUp = 1f; p.wave = 1f; p.mouth = 1f }
                 }
-                RState.FINALE -> if (r.finaleDone) { p.jump = abs(sin(time * 6.5f)) * 0.4f; p.armsUp = 1f; p.wave = 1f; p.mouth = 1f; p.pushing = false }
+                RState.FINALE -> if (r.finalePosed) { p.jump = abs(sin(time * 6.5f)) * 0.4f; p.armsUp = 1f; p.wave = 1f; p.mouth = 1f; p.pushing = false }
                 RState.IDLE -> { p.lookX = sin(time * 0.7f + i) * 0.8f; p.squash = sin(time * 2.4f + i) * 0.015f }
                 RState.RUN -> {}
             }
             if (r.dizzyT > 0f) p.blink = 0.15f
+            if (r.isPlayer && celebrating(r)) {
+                // turn around to celebrate towards the camera
+                val want = kotlin.math.atan2(cam.x - r.x, cam.z - r.z)
+                if (heroYaw.isNaN()) heroYaw = r.heading
+                var d = want - heroYaw
+                while (d > PI_F) d -= TAU
+                while (d < -PI_F) d += TAU
+                heroYaw += d * (1f - kotlin.math.exp(-5f * dt))
+                p.yaw = heroYaw; p.pushing = false; p.ballR = 0f
+            }
             res.rig.draw(r.look, p)
             // ball shadow caster + outline proxy
             if (visR[i] > 0.05f) {
@@ -823,7 +1007,7 @@ class RaceScene(
             // fx: snow spray, trail
             if (r.state == RState.RUN && r.speedNow > 1f) {
                 val seg = course.locate(r.ballZ)
-                if (seg.kind == SegKind.FIELD && rng.chance(if (r.isPlayer) 0.7f else 0.25f)) {
+                if (seg.kind == SegKind.FIELD && rng.chance(if (r.isPlayer) 0.4f else 0.14f)) {
                     val br = max(visR[i], 0.2f)
                     fx.emit(r.ballX + rng.range(-br, br) * 0.6f, r.y + 0.1f, r.ballZ - br * 0.6f, -sin(r.heading) * 1.2f + rng.range(-0.8f, 0.8f), rng.range(1f, 2.4f), -cos(r.heading) * 1.2f, 0.55f, 0.18f + br * 0.12f, 0.45f + br * 0.2f, 0xFFFFFFFF.toInt(), ParticleAtlas.PUFF, gravity = 3f, dragK = 2f)
                 }
@@ -843,17 +1027,42 @@ class RaceScene(
                 }
             }
         }
-        // spectators at the finish
-        for (s in spectators) {
-            val look = spectatorLooks[s[3].toInt() % spectatorLooks.size]
-            val p = pose
-            val excited = sim.player.z > course.finish.z0 - 12f
-            p.x = s[0]; p.z = s[1]; p.y = course.finishY; p.yaw = s[2]
-            p.move = 0f; p.phase = 0f; p.pushing = false; p.ballR = 0f; p.lean = 0f; p.roll = 0f; p.squash = 0f
-            p.jump = if (excited) abs(sin(time * 6f + s[4])) * 0.3f else 0f
-            p.armsUp = if (excited) 1f else 0f; p.wave = if (excited) 1f else 0.3f; p.blink = 1f; p.mouth = if (excited) 1f else 0f
-            p.scale = 0.95f; p.time = time + s[4]; p.lookX = 0f; p.outline = 1f
-            res.rig.draw(look, p)
+        // crowd in the grandstands (only drawn while the camera is near the finish)
+        if (cam.z > course.finish.z0 - 55f) {
+            val pz = sim.player.z
+            val party = sim.player.finished
+            val excited = pz > course.finish.z0 - 16f
+            for (s in spectators) {
+                val look = spectatorLooks[s[3].toInt() % spectatorLooks.size]
+                val ph = s[4]
+                val p = pose
+                p.x = s[0]; p.z = s[1]; p.y = s[5]; p.yaw = s[2] + sin(time * 0.6f + ph) * 0.15f
+                p.move = 0f; p.phase = 0f; p.pushing = false; p.ballR = 0f; p.lean = 0f; p.roll = 0f; p.squash = 0f
+                p.jump = 0f; p.armsUp = 0f; p.wave = 0f; p.mouth = 0f; p.lookX = 0f
+                p.blink = if ((time + ph * 1.3f) % 3.7f < 0.12f) 0.12f else 1f
+                when {
+                    party -> { p.jump = abs(sin(time * 6.5f + ph)) * 0.32f; p.armsUp = 1f; p.wave = 1f; p.mouth = 1f }
+                    excited -> {
+                        // a stadium wave rolls along the stands as racers come in
+                        val w = sin(time * 3.4f - s[1] * 0.75f)
+                        p.armsUp = clamp01((w + 0.15f) * 1.6f); p.jump = if (w > 0.5f) (w - 0.5f) * 0.6f else 0f
+                        p.wave = 1f; p.mouth = if (w > 0f) 1f else 0.4f
+                    }
+                    else -> {
+                        p.squash = sin(time * 2.2f + ph) * 0.02f; p.lookX = sin(time * 0.5f + ph) * 0.7f
+                        if (sin(time * 0.9f + ph) > 0.8f) { p.wave = 1f; p.mouth = 0.5f }
+                    }
+                }
+                p.scale = s[6]; p.time = time + ph; p.outline = 1f
+                res.rig.draw(look, p)
+            }
+            // party poppers from the crowd once Pip has finished
+            if (party && spectators.isNotEmpty() && rng.chance(0.08f)) {
+                val s = spectators[rng.nextInt(spectators.size)]
+                val cols = intArrayOf(0xFFFF4D8D.toInt(), 0xFF3DF5C8.toInt(), 0xFFFFC83D.toInt(), 0xFF5EC8FF.toInt())
+                for (i in 0 until 12) fx.emit(s[0], s[5] + 1.3f, s[1], rng.range(-1.2f, 1.2f) - kotlin.math.sign(s[0]) * 1.2f, rng.range(3f, 5.5f), rng.range(-1.2f, 1.2f),
+                    rng.range(1.2f, 1.8f), 0.18f, 0.16f, cols[i % cols.size], ParticleAtlas.SQUARE, gravity = 6f, dragK = 1.4f, rotation = rng.range(0f, TAU), rotSpeed = rng.range(-9f, 9f))
+            }
         }
         // mega ball outline/shadow proxies
         if (spec.boss == BossType.MEGA_BALL) for (i in sim.megaActive.indices) if (sim.megaActive[i]) {
@@ -862,6 +1071,31 @@ class RaceScene(
     }
 
     private fun ballY(r: Racer, i: Int): Float = r.ballY - r.ballR + visR[i]
+
+    private var heroYaw = Float.NaN
+    private var heroPuffed = false
+
+    /** Race over for this racer and the finale climb finished: time for the celebration close-up. */
+    private fun celebrating(r: Racer) = r.finished && (r.finalePosed || r.state == RState.FINISHED)
+
+    /** Start banner height offset: hangs over the line until GO, then eases up and away (it used to sweep across the player). */
+    private fun gateLift(): Float = when (sim.phase) {
+        Phase.INTRO, Phase.COUNTDOWN -> 0f
+        Phase.RACE -> { val k = clamp01(sim.phaseT / 0.9f); (1f - (1f - k) * (1f - k)) * 12f }
+        else -> 12f
+    }
+
+    /**
+     * Snow height (depth x SNOW_H) under a racer standing on a snow field. The sim stands racers 0.55x into it but the
+     * terrain is drawn 1.45x tall (crisper grooves), so the renderer lifts feet and ground rings to match what is drawn.
+     */
+    private fun snowUnder(r: Racer): Float {
+        if (r.state == RState.FALL) return 0f
+        val seg = course.locate(r.z)
+        if (seg.kind != SegKind.FIELD || abs(r.x) >= halfW) return 0f
+        val f = sim.fields[seg.index]
+        return if (f.contains(r.x, r.z)) f.depthAt(r.x, r.z) * SnowField.SNOW_H else 0f
+    }
 
     private fun drawBalls() {
         val prog = res.ball
@@ -901,19 +1135,19 @@ class RaceScene(
             for (i in sim.racers.indices) {
                 val r = sim.racers[i]
                 if (r.state == RState.FALL) continue
-                res.ground.add(r.x, r.y + 0.03f, r.z, 0.9f, 0xFF1B2A4A.toInt(), 0.35f, pa.rects[ParticleAtlas.BLOB])
+                res.ground.add(r.x, r.y + 0.03f + snowUnder(r) * RING_LIFT, r.z, 0.9f, 0xFF1B2A4A.toInt(), 0.35f, pa.rects[ParticleAtlas.BLOB])
                 if (visR[i] > 0.05f) res.ground.add(r.ballX, r.y + 0.03f, r.ballZ, visR[i] * 2.2f, 0xFF1B2A4A.toInt(), 0.35f, pa.rects[ParticleAtlas.BLOB])
             }
         }
         if (p.state != RState.FALL && !p.finished) {
             val pulse = 0.85f + sin(time * 5f) * 0.12f
-            res.ground.add(p.x, p.y + 0.04f, p.z, 1.15f * pulse, 0xFFFF4D8D.toInt(), 0.75f, pa.rects[ParticleAtlas.RING])
+            res.ground.add(p.x, p.y + 0.04f + snowUnder(p) * RING_LIFT, p.z, 1.15f * pulse, 0xFFFF4D8D.toInt(), 0.75f, pa.rects[ParticleAtlas.RING])
         }
         fx.fill(pa, res.bill, res.ground)
         // snowfall around the camera target
         val fall = when (spec.weather) { Weather.BLIZZARD -> 3.2f; else -> 1.4f }
         val wind = if (spec.weather == Weather.BLIZZARD) 2.5f else 0.4f
-        val dt = 1f / 60f
+        val dt = frameDt
         for (i in 0 until flakeCount) {
             val o = i * 4
             flakes[o + 1] -= fall * dt
@@ -921,10 +1155,19 @@ class RaceScene(
             if (flakes[o + 1] < -1f) { flakes[o + 1] = 14f; flakes[o] = rng.range(-14f, 14f) }
             if (flakes[o] > 14f) flakes[o] -= 28f
             val wx = lookX + flakes[o]; val wy = lookY + flakes[o + 1]; val wz = lookZ + flakes[o + 2] - 6f
+            val cdx = wx - cam.x; val cdy = wy - cam.y; val cdz = wz - cam.z
+            if (cdx * cdx + cdy * cdy + cdz * cdz < 20f) continue
             res.bill.add(wx, wy, wz, 0.09f + (i % 3) * 0.03f, 0xFFFFFFFF.toInt(), 0.85f, pa.rects[ParticleAtlas.SOFT])
         }
         // clouds
-        for (c in clouds) res.bill.add(c[0] + sin(time * 0.02f + c[2]) * 6f, c[1], c[2], c[3], 0xFFFFFFFF.toInt(), if (light.night > 0f) 0.25f else 0.8f, pa.rects[ParticleAtlas.CLOUD])
+        val cloudA = if (light.night > 0f) 0.25f else 0.8f
+        for (c in clouds) {
+            val cx = c[0] + sin(time * 0.02f + c[2]) * 6f
+            // fade out any cloud the camera gets close to (a camera-facing sprite there reads as a white blob)
+            val dx = cx - cam.x; val dy = c[1] - cam.y; val dz = c[2] - cam.z
+            val near = clamp01((sqrt(dx * dx + dy * dy + dz * dz) - c[3] * 0.7f) / (c[3] * 0.8f))
+            if (near > 0.01f) res.bill.add(cx, c[1], c[2], c[3], 0xFFFFFFFF.toInt(), cloudA * near, pa.rects[ParticleAtlas.CLOUD])
+        }
         // shields / boosts / dizzy
         for (i in sim.racers.indices) {
             val r = sim.racers[i]
@@ -958,9 +1201,11 @@ class RaceScene(
             res.iconBill.add(pk.x, pk.y + 0.95f + bob, pk.z, 0.95f, 0xFFFFFFFF.toInt(), 1f, res.iconAtlas.rects[icon])
         }
         // labels: racer names
+        val hero = celebrating(p)
         for (i in sim.racers.indices) {
             val r = sim.racers[i]
             if (r.state == RState.FALL && r.y < RaceSim.WATER_Y + 0.2f) continue
+            if (hero) continue
             val rect = text.rects[labelIndexOfRacer[i]]
             val dx = r.x - cam.x; val dz = r.z - cam.z; val dy = r.y - cam.y
             val dist = sqrt(dx * dx + dy * dy + dz * dz)
@@ -969,23 +1214,45 @@ class RaceScene(
             if (r.isPlayer && !r.finished) res.bill.add(r.x, r.y + 2.3f + sin(time * 5f) * 0.08f, r.z, 0.42f * (dist / 15f).coerceIn(0.9f, 2f), 0xFFFF4D8D.toInt(), 1f, pa.rects[ParticleAtlas.ARROW])
         }
         // multiplier labels on steps + finish
-        for (k in 1..Course.STEPS) {
+        if (!hero) for (k in 1..Course.STEPS) {
+            // labels draw on top of everything, so drop the ones Pip has already climbed past
+            if (p.state == RState.FINALE && course.stepZ0(k) + Course.STEP_DEPTH < p.z + 0.4f) continue
+            if (p.finaleDone && k <= p.finaleStep) continue // Pip stands on it: the label would cover him
             val top = course.finishY + k * Course.STEP_RISE
             res.labelBill.add(0f, top + 0.6f, course.stepZ0(k) + 0.35f, 0.75f, 0xFFFFFFFF.toInt(), 1f, text.rects[multLabel0 + k - 1])
         }
         res.labelBill.add(0f, course.finishY + 3.55f, course.finishLineZ - 0.3f, 0.75f, 0xFFFFFFFF.toInt(), 1f, text.rects[finishLabel])
-        if (sim.phase == Phase.INTRO || sim.phase == Phase.COUNTDOWN) res.labelBill.add(0f, 3.55f, -0.55f, 0.6f, 0xFFFFFFFF.toInt(), 1f, text.rects[finishLabel + 1])
+        val lift = gateLift()
+        if (lift < GATE_GONE) res.labelBill.add(0f, 3.55f + lift, -0.55f, 0.6f, 0xFFFFFFFF.toInt(), 1f, text.rects[finishLabel + 1])
     }
 
     override fun release() {
         if (rollStream != 0) audio.stopLoop(rollStream)
         if (avalancheStream != 0) audio.stopLoop(avalancheStream)
         for (t in terrains) t.release()
+        water.release()
         land.release()
+        platform.mesh.release()
         TextureUtil.delete(text.texture)
     }
 
     companion object {
+        /** Feet end up 0.3x deep in the drawn snow (1.45 - 0.55 - 0.6): planted, not buried. */
+        private const val FOOT_LIFT = 0.6f
+        /** Ground rings sit on the drawn snow surface. */
+        private const val RING_LIFT = 0.92f
+        private const val GATE_GONE = 11.9f
+        private val SIDES = floatArrayOf(-1f, 1f)
+        private val STEP_COLORS = intArrayOf(0x5EC8FF, 0x3DF5C8, 0xFFC83D, 0xFF7A45, 0xFF4D8D)
+        private const val STAND_TIERS = 3
+        private const val STAND_TIER_W = 0.8f
+        private const val STAND_TIER_RISE = 0.4f
+        // celebration camera: Pip ~22% of the screen tall, centred ~37% from the top (above the results card)
+        private const val HERO_SIDE = 1.1f
+        private const val HERO_UP = 2.2f
+        private const val HERO_BACK = 7.0f
+        private const val HERO_LOOK_Y = -0.1f
+
         fun rgbToInt(c: FloatArray): Int = ((c[0].coerceIn(0f, 1f) * 255).toInt() shl 16) or ((c[1].coerceIn(0f, 1f) * 255).toInt() shl 8) or (c[2].coerceIn(0f, 1f) * 255).toInt()
 
         /** Box slab with a flat top and vertically graded sides (icy cliffs into the water). */

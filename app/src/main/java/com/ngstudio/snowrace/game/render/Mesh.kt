@@ -96,6 +96,13 @@ class Mesh(data: MeshData, instanced: Boolean) {
         GLES30.glDrawElementsInstanced(GLES30.GL_TRIANGLES, indexCount, if (useInt) GLES30.GL_UNSIGNED_INT else GLES30.GL_UNSIGNED_SHORT, 0, count)
     }
 
+    /** Frees the GPU buffers (call when a per-level mesh is no longer used). */
+    fun release() {
+        GLES30.glDeleteVertexArrays(1, intArrayOf(vao), 0)
+        val ids = if (instanceVbo != 0) intArrayOf(vbo, ibo, instanceVbo) else intArrayOf(vbo, ibo)
+        GLES30.glDeleteBuffers(ids.size, ids, 0)
+    }
+
     fun uploadInstances(buf: FloatBuffer, count: Int, capacityBytes: Int) {
         GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, instanceVbo)
         GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, capacityBytes, null, GLES30.GL_STREAM_DRAW)

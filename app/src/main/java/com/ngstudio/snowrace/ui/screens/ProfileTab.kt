@@ -161,6 +161,7 @@ fun ProfileTab(save: SaveData) {
                             if (ready) GameButton("${a.reward}", onClick = {
                                 val r = GameRules.claimAchievement(c.save.data, a.id) ?: return@GameButton
                                 c.save.update { r }
+                                com.ngstudio.snowrace.analytics.Telemetry.reward("achievement_${a.id}", a.reward, a.gems)
                                 c.audio.play(Sfx.UNLOCK); c.haptics.play(Haptic.SUCCESS)
                                 nav.showToast("${a.title}: +${a.reward} coins, +${a.gems} gems")
                             }, modifier = Modifier.width(88.dp), height = 40.dp, colors = Buttons.Gold, icon = R.drawable.ui_coin, textStyle = Type.Label)

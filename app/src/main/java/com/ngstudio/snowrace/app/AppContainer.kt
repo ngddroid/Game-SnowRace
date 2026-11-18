@@ -3,6 +3,11 @@ package com.ngstudio.snowrace.app
 import android.app.Application
 import android.content.Context
 import com.ngstudio.snowrace.ads.AdConfig
+import com.ngstudio.snowrace.analytics.Telemetry
+import com.ngstudio.snowrace.notify.Notifications
+import com.ngstudio.snowrace.notify.Push
+import com.ngstudio.snowrace.notify.Reminders
+import com.ngstudio.snowrace.update.AppUpdater
 import com.ngstudio.snowrace.ads.AdProvider
 import com.ngstudio.snowrace.audio.AudioEngine
 import com.ngstudio.snowrace.audio.Haptic
@@ -21,7 +26,13 @@ import com.ngstudio.snowrace.level.LevelRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Manual dependency container living as long as the process. */
 class AppContainer(val app: Application) {
@@ -31,6 +42,9 @@ class AppContainer(val app: Application) {
     val haptics = Haptics(app)
     val ads: AdProvider = AdConfig.create()
     val stage = Stage(this)
+    val updater = AppUpdater(app)
+    /** Home tab a tapped notification asked for (home, levels, shop, rewards, profile); the main screen consumes it. */
+    val openTab = MutableStateFlow<String?>(null)
     @Volatile var levelSaltsLoaded = false
 
     init {
@@ -53,9 +67,25 @@ class AppContainer(val app: Application) {
         haptics.enabled = s.haptics
     }
 
+    /** "Share usage & crash data" toggle. */
+    fun setShareData(on: Boolean) {
+        save.update { it.copy(settings = it.settings.copy(shareData = on)) }
+        Telemetry.setConsent(on)
+    }
+
+    /** Notifications toggle (local reminders + push). The system permission is handled by the caller. */
+    fun setNotifications(on: Boolean) {
+        save.update { it.copy(settings = it.settings.copy(notifications = on)) }
+        if (!on) Reminders.cancel(app)
+        Push.setEnabled(on, changed = true)
+    }
+
     fun tap() { audio.play(Sfx.UI_TAP); haptics.play(Haptic.TICK) }
     fun back() { audio.play(Sfx.UI_BACK); haptics.play(Haptic.TICK) }
 }
+
+/** Text shown on the loading cover while the 3D scene is swapped behind it. */
+data class LoadingCover(val title: String = "", val subtitle: String = "")
 
 /** Controls the persistent 3D layer behind the Compose UI. */
 class Stage(private val c: AppContainer) {
@@ -65,6 +95,32 @@ class Stage(private val c: AppContainer) {
         private set
     private var rendering = true
     private var music: Music? = null
+
+    private val _cover = MutableStateFlow<LoadingCover?>(null)
+    /** Non-null while the loading cover should be up. */
+    val cover: StateFlow<LoadingCover?> = _cover.asStateFlow()
+    private var coverSeq = 0
+    /** True while the 3D layer shows (or is building) a race. */
+    var raceShown = false
+        private set
+
+    /**
+     * Swaps the 3D scene behind an opaque cover: the cover fades in first, then [swap] queues the GL build
+     * (which blocks the GL thread for a moment), and the cover lifts once the new scene has drawn its first frame.
+     * The player never sees a frozen frame or the old scene popping into the new one.
+     */
+    suspend fun swapScene(cover: LoadingCover = LoadingCover(), swap: () -> Unit) {
+        val token = ++coverSeq
+        try {
+            _cover.value = cover
+            delay(COVER_FADE_IN_MS + 30L)
+            swap()
+            renderer?.let { r -> withTimeoutOrNull(6000L) { r.building.first { it == 0 } } }
+            delay(90L) // let the first frames of the new scene reach the screen
+        } finally {
+            if (coverSeq == token) _cover.value = null
+        }
+    }
 
     fun attach(s: GameSurfaceView, r: GameRenderer) { surface = s; renderer = r }
     fun detach() { surface = null; renderer = null }
@@ -76,6 +132,7 @@ class Stage(private val c: AppContainer) {
             Catalog.character(d.profile.character), Catalog.ball(d.profile.ball), Catalog.trail(d.profile.trail),
             mode, level.biome, level.time,
         )
+        raceShown = false
         renderer?.updateMenu(spec)
         setRendering(true)
     }
@@ -94,6 +151,7 @@ class Stage(private val c: AppContainer) {
     }
 
     fun showRace(controller: RaceController) {
+        raceShown = true
         renderer?.show(SceneSpec.Race(controller))
         setRendering(true)
     }
@@ -114,15 +172,23 @@ class Stage(private val c: AppContainer) {
     }
 
     fun currentMusic() = music
+
+    companion object {
+        const val COVER_FADE_IN_MS = 170
+        const val COVER_FADE_OUT_MS = 380
+    }
 }
 
 class App : Application() {
-    lateinit var container: AppContainer
-        private set
+    /** Built on first use, so a background start (a reminder or push in a fresh process) doesn't load the game. */
+    val container: AppContainer by lazy { AppContainer(this) }
 
     override fun onCreate() {
         super.onCreate()
-        container = AppContainer(this)
+        val s = SaveRepository.peek(this)?.settings ?: Settings()
+        Telemetry.init(this, s.shareData)
+        Notifications.createChannels(this)
+        Push.setEnabled(s.notifications, changed = false)
     }
 }
 

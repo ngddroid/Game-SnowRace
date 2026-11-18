@@ -36,6 +36,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.ngstudio.snowrace.BuildConfig
 import com.ngstudio.snowrace.R
+import com.ngstudio.snowrace.analytics.Telemetry
+import com.ngstudio.snowrace.notify.Push
+import com.ngstudio.snowrace.notify.Reminders
 import com.ngstudio.snowrace.data.MAX_LEVEL
 import com.ngstudio.snowrace.data.Settings
 import com.ngstudio.snowrace.ui.LocalNav
@@ -49,6 +52,7 @@ import com.ngstudio.snowrace.ui.components.GameToggle
 import com.ngstudio.snowrace.ui.components.LocalContainer
 import com.ngstudio.snowrace.ui.components.OutlinedText
 import com.ngstudio.snowrace.ui.components.Panel
+import com.ngstudio.snowrace.ui.components.StudioCredit
 import com.ngstudio.snowrace.ui.components.UiIcon
 import com.ngstudio.snowrace.ui.components.pressable
 import com.ngstudio.snowrace.ui.theme.Palette
@@ -126,6 +130,25 @@ fun SettingsScreen(activity: Activity) {
                 }
                 Spacer(Modifier.height(12.dp))
                 Panel(Modifier.fillMaxWidth()) {
+                    SectionHeader("Notifications & Privacy")
+                    val notif = rememberNotificationAccess(openSettingsIfBlocked = true)
+                    ToggleRow(R.drawable.ui_gift, "Notifications", s.notifications && notif.allowed) { v ->
+                        c.setNotifications(v)
+                        if (v && !notif.allowed) notif.request()
+                    }
+                    BodyText(
+                        if (s.notifications && !notif.allowed) "Turned off in Android settings. Switch on to allow them again."
+                        else "Daily gift reminders and news about new levels and events.",
+                        color = Palette.Muted, style = Type.Small, modifier = Modifier.padding(start = 44.dp),
+                    )
+                    ToggleRow(R.drawable.ui_privacy, "Share usage & crash data", s.shareData) { v -> c.setShareData(v) }
+                    BodyText(
+                        "Anonymous game stats and crash reports help us fix bugs and balance levels. No ads tracking, no account.",
+                        color = Palette.Muted, style = Type.Small, modifier = Modifier.padding(start = 44.dp),
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                Panel(Modifier.fillMaxWidth()) {
                     SectionHeader("About")
                     LinkRow(R.drawable.ui_doc, "Terms of Service") { nav.push(Screen.Legal(LegalDoc.TERMS)) }
                     LinkRow(R.drawable.ui_privacy, "Privacy Policy") { nav.push(Screen.Legal(LegalDoc.PRIVACY)) }
@@ -133,6 +156,9 @@ fun SettingsScreen(activity: Activity) {
                     GameButton("Reset Progress", onClick = { confirmReset = true }, modifier = Modifier.fillMaxWidth(), colors = Buttons.Coral, height = 50.dp, icon = R.drawable.ui_trash)
                     Spacer(Modifier.height(10.dp))
                     BodyText("Version ${BuildConfig.VERSION_NAME}${if (BuildConfig.DEBUG) " (debug)" else ""}", Modifier.fillMaxWidth(), color = Palette.Muted, style = Type.Small, align = TextAlign.Center)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                        StudioCredit(inline = true, logoWidth = 64.dp)
+                    }
                 }
                 if (BuildConfig.DEBUG) {
                     Spacer(Modifier.height(12.dp))
@@ -151,6 +177,20 @@ fun SettingsScreen(activity: Activity) {
                         }
                         Spacer(Modifier.height(6.dp))
                         GameButton("Autopilot next race", onClick = { nav.showToast("Autopilot armed for the next race"); DebugFlags.autopilot = true }, modifier = Modifier.fillMaxWidth(), height = 44.dp, colors = Buttons.Mint, textStyle = Type.Label)
+                        Spacer(Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            GameButton("Test reminders", onClick = { Reminders.scheduleTest(activity); nav.showToast("3 reminders in 5-13 s: leave the game") }, modifier = Modifier.weight(1f), height = 44.dp, colors = Buttons.Sky, textStyle = Type.Label)
+                            GameButton("Fake update", onClick = { c.updater.simulate(); nav.showToast("Update downloaded: see Home") }, modifier = Modifier.weight(1f), height = 44.dp, colors = Buttons.Gold, textStyle = Type.Label)
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            GameButton("Log FCM token", onClick = { Push.logToken(); nav.showToast(if (Telemetry.available) "Token in logcat (tag Push)" else "No google-services.json") }, modifier = Modifier.weight(1f), height = 44.dp, colors = Buttons.Purple, textStyle = Type.Label)
+                            GameButton("Test crash", onClick = { throw RuntimeException("Crashlytics test crash (debug button)") }, modifier = Modifier.weight(1f), height = 44.dp, colors = Buttons.Coral, textStyle = Type.Label)
+                        }
+                        BodyText(
+                            "Firebase: " + (if (!Telemetry.available) "not configured (add app/google-services.json)" else if (Telemetry.active) "sending" else "configured, not sending (setprop debug.snowrace.firebase 1)"),
+                            color = Palette.Muted, style = Type.Small,
+                        )
                     }
                 }
                 Spacer(Modifier.height(30.dp))
@@ -165,7 +205,7 @@ fun SettingsScreen(activity: Activity) {
                 BodyText("All levels, coins, gems and unlocked items on this device will be erased. This cannot be undone.", align = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(14.dp))
                 GameButton("Erase Everything", onClick = {
-                    c.save.resetAll(); confirmReset = false; nav.showToast("Progress reset")
+                    c.save.resetAll(); Telemetry.resetIdentity(); confirmReset = false; nav.showToast("Progress reset")
                     nav.replaceAll(Screen.Main)
                 }, modifier = Modifier.fillMaxWidth(), colors = Buttons.Coral)
                 Spacer(Modifier.height(8.dp))
