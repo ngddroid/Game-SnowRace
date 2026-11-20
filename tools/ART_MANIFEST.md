@@ -16,6 +16,11 @@ Brand palette: night indigo #1E1B4B, deep indigo #2E2A7A, sky blue #5EC8FF, ice 
 
 ## Launcher icon (adaptive, API 26+) and legacy icons
 
+> **Replaced (2026-11-20):** the launcher icon is now the supplied artwork (snowball racer in a red bobble hat
+> and goggles), master copy `store/play_icon_512.png`. Every `ic_launcher*` PNG, `assets/legal/app_logo.webp` and
+> `drawable-nodpi/splash_icon.png` are resized from it; the monochrome (themed icon) layer was dropped. The rows
+> below describe the old generated Pip icon and no longer match the files. Don't let `gen_art.py` overwrite them.
+
 | File | Size / mode | Notes |
 |---|---|---|
 | `app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml` | xml | adaptive-icon: background, foreground and monochrome (themed icon) mipmaps |

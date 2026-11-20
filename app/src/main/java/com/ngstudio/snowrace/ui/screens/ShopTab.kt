@@ -75,6 +75,9 @@ import com.ngstudio.snowrace.ui.theme.Type
 import kotlin.math.cos
 import kotlin.math.sin
 
+/** Debug builds unlock any shop item for free (no coins or gems needed or spent). Release builds charge as usual. */
+private val DEBUG_FREE_UNLOCK = com.ngstudio.snowrace.BuildConfig.DEBUG
+
 private enum class ShopCat(val title: String) { CHARS("Snowpals"), BALLS("Snowballs"), TRAILS("Trails") }
 
 private class ShopItem(val id: String, val name: String, val rarity: Rarity, val price: Price, val note: String)
@@ -166,22 +169,23 @@ fun ShopTab(save: SaveData) {
                                 }
                                 c.audio.play(Sfx.POWERUP); c.stage.wave()
                             }, modifier = Modifier.fillMaxWidth(), colors = Buttons.Mint, height = 52.dp)
-                            sel.price.type == PriceType.REWARD -> GameButton("Reward Only", onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth(), height = 52.dp)
+                            // debug builds: every item unlocks for free from this button, coins/gems or not (reward-only too)
+                            sel.price.type == PriceType.REWARD && !DEBUG_FREE_UNLOCK -> GameButton("Reward Only", onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth(), height = 52.dp)
                             else -> {
-                                val afford = GameRules.canAfford(save, sel.price)
+                                val afford = DEBUG_FREE_UNLOCK || GameRules.canAfford(save, sel.price)
                                 GameButton(
-                                    formatNum(sel.price.amount), onClick = {
-                                        val res = GameRules.buy(c.save.data, sel.id, sel.price)
+                                    if (sel.price.type == PriceType.REWARD) "Unlock" else formatNum(sel.price.amount), onClick = {
+                                        val res = if (DEBUG_FREE_UNLOCK) GameRules.grant(c.save.data, sel.id) else GameRules.buy(c.save.data, sel.id, sel.price)
                                         if (res != null) {
                                             c.save.update { res }
-                                            com.ngstudio.snowrace.analytics.Telemetry.spend(sel.id, if (sel.price.type == PriceType.GEMS) "gems" else "coins", sel.price.amount)
+                                            if (!DEBUG_FREE_UNLOCK) com.ngstudio.snowrace.analytics.Telemetry.spend(sel.id, if (sel.price.type == PriceType.GEMS) "gems" else "coins", sel.price.amount)
                                             c.audio.play(Sfx.UNLOCK); c.stage.wave()
                                             reveal = sel.id
                                         } else { c.audio.play(Sfx.ERROR); nav.showToast("Not enough ${if (sel.price.type == PriceType.GEMS) "gems" else "coins"}") }
                                     },
                                     modifier = Modifier.fillMaxWidth(), height = 52.dp,
                                     colors = if (afford) Buttons.Gold else Buttons.Grey,
-                                    icon = if (sel.price.type == PriceType.GEMS) R.drawable.ui_gem else R.drawable.ui_coin,
+                                    icon = when (sel.price.type) { PriceType.GEMS -> R.drawable.ui_gem; PriceType.REWARD -> R.drawable.ui_gift; else -> R.drawable.ui_coin },
                                 )
                             }
                         }
