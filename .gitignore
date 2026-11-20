@@ -17,3 +17,6 @@ captures/
 
 # macOS
 .DS_Store
+
+# Signed release builds (APK/AAB + R8 mapping) exported by Android Studio
+app/release/

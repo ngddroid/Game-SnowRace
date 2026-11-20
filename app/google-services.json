@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "314459762710",
+    "project_id": "game-sonwrace3d",
+    "storage_bucket": "game-sonwrace3d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:314459762710:android:7aa77317f9e54190ffc537",
+        "android_client_info": {
+          "package_name": "com.ngstudio.frostyroll"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCXhFFoJazY_SueN9FV9t_qz_znktK-zwo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

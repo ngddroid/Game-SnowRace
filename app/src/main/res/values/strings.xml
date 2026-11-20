@@ -1,11 +1,6 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">Frosty Roll Rally</string>
 
-    <!-- Legal page tokens: fill these in before publishing. -->
-    <string name="legal_studio_name" translatable="false">NG Studio</string>
-    <string name="legal_contact_email" translatable="false">support@example.com</string>
-    <string name="legal_effective_date" translatable="false">November 18, 2026</string>
-
     <!-- Notification channels (shown in Android's app notification settings) -->
     <string name="channel_reminders">Daily rewards &amp; reminders</string>
     <string name="channel_reminders_desc">When your daily gift or free spin is ready.</string>

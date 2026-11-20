@@ -27,8 +27,6 @@ data class Settings(
     /** 0 = Auto, 1 = Low, 2 = Medium, 3 = High */
     val quality: Int = 0,
     val sensitivity: Float = 1f,
-    val leftHanded: Boolean = false,
-    val showFps: Boolean = false,
     /** Daily-gift reminders and push news (the system permission is asked separately on Android 13+). */
     val notifications: Boolean = true,
     /** The in-game "allow notifications?" prompt was already shown once. */

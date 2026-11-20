@@ -12,11 +12,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,7 +23,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -33,20 +30,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.ngstudio.snowrace.R
 import com.ngstudio.snowrace.analytics.Telemetry
-import com.ngstudio.snowrace.data.SaveData
 import com.ngstudio.snowrace.notify.Notifications
 import com.ngstudio.snowrace.ui.components.BodyText
 import com.ngstudio.snowrace.ui.components.Buttons
 import com.ngstudio.snowrace.ui.components.GameButton
-import com.ngstudio.snowrace.ui.components.GameDialog
 import com.ngstudio.snowrace.ui.components.LocalContainer
 import com.ngstudio.snowrace.ui.components.UiIcon
-import com.ngstudio.snowrace.ui.components.pressable
 import com.ngstudio.snowrace.ui.theme.Palette
 import com.ngstudio.snowrace.ui.theme.Type
 import kotlinx.coroutines.delay
@@ -83,39 +76,23 @@ fun rememberNotificationAccess(openSettingsIfBlocked: Boolean, onResult: (Boolea
 }
 
 /**
- * One friendly in-game ask before Android's permission dialog, shown once on the home screen after the second race
- * (asking at first launch gets far more "Don't allow" taps). Android 12 and older don't need it.
+ * Notifications are on from the first launch. Android 13+ only allows that after the POST_NOTIFICATIONS permission
+ * dialog, so it is shown once, right after the studio intro ([enabled]). Older Android versions need no dialog.
+ * If the player taps "Don't allow", the Settings switch shows off and can turn them on later.
  */
 @Composable
-fun NotificationAsk(save: SaveData) {
+fun FirstLaunchNotificationRequest(enabled: Boolean) {
     val c = LocalContainer.current
     val ctx = LocalContext.current
-    val s = save.settings
-    val eligible = !s.notifPrompted && s.notifications && save.stats.races >= 2 && Notifications.needsPermission(ctx)
-    var show by remember { mutableStateOf(false) }
-    val access = rememberNotificationAccess(openSettingsIfBlocked = false)
-    LaunchedEffect(eligible) {
-        if (!eligible) return@LaunchedEffect
-        delay(900)
-        show = true
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        Telemetry.notificationPermission(granted)
     }
-    if (!show) return
-    fun done() {
-        show = false
+    LaunchedEffect(enabled) {
+        val s = c.save.data.settings
+        if (!enabled || s.notifPrompted || !s.notifications || !Notifications.needsPermission(ctx)) return@LaunchedEffect
+        delay(600) // let the splash settle so the dialog doesn't pop over the screen change
         c.save.update { it.copy(settings = it.settings.copy(notifPrompted = true)) }
-    }
-    GameDialog("Never miss a gift!", onDismiss = { done() }, ribbon = Palette.Sky, ribbonDark = Palette.SkyDeep) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-            UiIcon(R.drawable.ui_gift, 76.dp)
-            BodyText(
-                "Get a heads-up when your daily gift and free spin are ready, and when new levels and outfits arrive.",
-                align = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(14.dp))
-            GameButton("Turn On", onClick = { done(); access.request() }, modifier = Modifier.fillMaxWidth(), colors = Buttons.Green, icon = R.drawable.ui_check)
-            Spacer(Modifier.height(8.dp))
-            BodyText("Not now", color = Palette.Muted, style = Type.Label, modifier = Modifier.pressable { done() }.padding(8.dp))
-        }
+        launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 }
 

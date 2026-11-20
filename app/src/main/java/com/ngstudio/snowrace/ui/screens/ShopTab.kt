@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.pointerInput
@@ -121,14 +122,18 @@ fun ShopTab(save: SaveData) {
             Panel(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 8.dp).padding(bottom = 92.dp), padding = 10.dp) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     for (k in ShopCat.entries) {
+                        // the selected category is a pink button; the other two are plain text
                         val on = k == cat
+                        val shape = RoundedCornerShape(14.dp)
+                        // pressable (its tap squash) goes first so the pink face scales with it; the background and border
+                        // are always in the chain, just transparent when unselected, so a tap never leaves them undrawn
                         Box(
-                            Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(14.dp))
-                                .background(if (on) Brush.verticalGradient(listOf(Color(0xFFFF86B3), Palette.Berry)) else Brush.verticalGradient(listOf(Color(0xFFDDEBFA), Color(0xFFC3D7EE))))
-                                .border(2.5.dp, Palette.Navy, RoundedCornerShape(14.dp)).pressable { cat = k },
+                            Modifier.weight(1f).height(38.dp).pressable { cat = k }.clip(shape)
+                                .background(if (on) Brush.verticalGradient(listOf(Color(0xFFFF86B3), Palette.Berry)) else SolidColor(Color.Transparent))
+                                .border(2.5.dp, if (on) Palette.Navy else Color.Transparent, shape),
                             contentAlignment = Alignment.Center,
                         ) {
-                            if (on) OutlinedText(k.title, style = Type.Label, outlineWidth = 3.dp) else BodyText(k.title, style = Type.Label, color = Palette.Navy)
+                            if (on) OutlinedText(k.title, style = Type.Label, outlineWidth = 3.dp) else BodyText(k.title, style = Type.Label, color = Palette.Muted)
                         }
                     }
                 }

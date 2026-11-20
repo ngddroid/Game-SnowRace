@@ -66,6 +66,7 @@ import com.ngstudio.snowrace.ui.screens.LegalDoc
 import com.ngstudio.snowrace.ui.screens.LegalScreen
 import com.ngstudio.snowrace.ui.screens.MainScreen
 import com.ngstudio.snowrace.ui.screens.MockAdOverlay
+import com.ngstudio.snowrace.ui.screens.FirstLaunchNotificationRequest
 import com.ngstudio.snowrace.ui.screens.OnboardingScreen
 import com.ngstudio.snowrace.ui.screens.RaceScreen
 import com.ngstudio.snowrace.ui.screens.SettingsScreen
@@ -176,6 +177,7 @@ fun FrostyApp(c: AppContainer, activity: Activity) {
             (c.ads as? MockAdProvider)?.let { MockAdOverlay(it) }
             ToastHost(nav)
         }
+        FirstLaunchNotificationRequest(enabled = top != Screen.StudioIntro && top !is Screen.Race)
         BackHandler(enabled = nav.stack.size > 1 && top !is Screen.Race && top !is Screen.Onboarding) { c.back(); nav.pop() }
     }
 }

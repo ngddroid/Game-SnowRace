@@ -89,7 +89,7 @@ class CharacterRig(private val batches: CharBatches) {
         private val kidLooks: Map<String, Pair<Int, Int>> = mapOf(
             "pip" to (0xFFDCC0 to 0x6B3E1F),
             "bubbles" to (0x8D5524 to 0x1B1B1B),
-            "mochi" to (0xF1C27D to 0xE8B04A),
+            "mochi" to (0xFFD2B8 to 0xF2F2F2), // Lil' Santa: rosy cheeks, white hair
             "minty" to (0xC68642 to 0x2B1A10),
             "sunny" to (0xFFDBAC to 0xB5532A),
             "grape" to (0xE0AC69 to 0x3A2414),
@@ -219,6 +219,15 @@ class CharacterRig(private val batches: CharBatches) {
                 part(PartMesh.TORUS, Role.STATIC, 0f, HEAD_Y + 0.05f, 0f, 0f, PI_F / 2, PI_F / 2, 0.31f, 0.2f, 0.31f, d.hatTrim)
                 for (sd in listOf(-1f, 1f)) s(Role.STATIC, sd * 0.3f, HEAD_Y + 0.02f, 0f, 0.09f, 0.11f, 0.1f, d.hatColor)
             }
+            Hat.SANTA -> {
+                // soft red cap, then a floppy tip leaning back, white fur brim and pompom
+                s(Role.STATIC, 0f, HEAD_Y + 0.16f, -0.015f, 0.285f, 0.205f, 0.28f, d.hatColor, gloss = 0.05f)
+                val pitch = -0.95f
+                val len = 0.36f
+                part(PartMesh.CONE, Role.STATIC, 0f, HEAD_Y + 0.25f, -0.04f, 0f, pitch, 0f, 0.2f, len, 0.2f, d.hatColor, gloss = 0.05f)
+                part(PartMesh.TORUS, Role.STATIC, 0f, HEAD_Y + 0.13f, -0.005f, 0f, 0f, 0f, 0.28f, 0.3f, 0.275f, d.hatTrim, gloss = 0.02f)
+                s(Role.POMPOM, 0f, HEAD_Y + 0.25f + cos(pitch) * len, -0.04f + sin(pitch) * len, 0.075f, 0.075f, 0.075f, d.pompom, gloss = 0.02f)
+            }
             Hat.NONE -> {}
         }
 
@@ -247,6 +256,18 @@ class CharacterRig(private val batches: CharBatches) {
                 s(Role.STATIC, 0.02f, HEAD_Y + 0.08f, -0.25f, 0.11f, 0.11f, 0.1f, 0xB46CFF)
                 s(Role.STATIC, -0.01f, HEAD_Y - 0.05f, -0.26f, 0.1f, 0.1f, 0.09f, d.extraColor)
                 s(Role.STATIC, 0.06f, HEAD_Y + 0.25f, 0.05f, 0.08f, 0.07f, 0.08f, 0xB46CFF)
+            }
+            Extra.BEARD -> {
+                // fluffy beard under the mouth, side puffs and a moustache (the smile stays visible)
+                s(Role.HEAD, 0f, HEAD_Y - 0.2f, 0.16f, 0.19f, 0.12f, 0.13f, d.extraColor, ol = 0.6f, gloss = 0.02f)
+                for (sd in floatArrayOf(-1f, 1f)) {
+                    s(Role.HEAD, sd * 0.15f, HEAD_Y - 0.13f, 0.14f, 0.09f, 0.11f, 0.09f, d.extraColor, ol = 0f, gloss = 0.02f)
+                    s(Role.HEAD, sd * 0.05f, HEAD_Y - 0.072f, 0.262f, 0.06f, 0.028f, 0.03f, d.extraColor, ol = 0f, gloss = 0.02f)
+                }
+            }
+            Extra.BELT -> {
+                part(PartMesh.TORUS, Role.STATIC, 0f, 0.5f, 0f, 0f, 0f, 0f, 0.2f, 0.25f, 0.178f, 0x1E1E26, gloss = 0.5f)
+                part(PartMesh.BOX, Role.STATIC, 0f, 0.5f, 0.205f, 0f, 0f, 0f, 0.1f, 0.08f, 0.03f, 0xFFC83D, ol = 0f, gloss = 1.1f)
             }
             Extra.WHISKERS, Extra.FLUFF, Extra.PANDA_PATCHES, Extra.EYE_PATCH -> {}
         }

@@ -29,6 +29,7 @@ object Reminders {
     private const val TAG = "reminder"
     private const val TEST_TAG = "reminder-test"
     private const val KEY_KIND = "kind"
+    private const val KEY_TEST = "test"
     private const val EVENING_HOUR = 18
     private val kinds = listOf("daily", "comeback3", "comeback7")
 
@@ -46,16 +47,19 @@ object Reminders {
         WorkManager.getInstance(ctx).cancelAllWorkByTag(TAG)
     }
 
-    /** Debug: fire all three reminders a few seconds from now (own tag, so leaving the game doesn't replace them). */
+    /**
+     * Debug: fire every reminder text a few seconds from now, including both daily variants (gift and wheel) whatever
+     * the save says. Own tag, so leaving the game doesn't replace them.
+     */
     fun scheduleTest(ctx: Context) {
         val wm = WorkManager.getInstance(ctx)
-        kinds.forEachIndexed { i, k -> enqueue(wm, k, 5_000L + i * 4_000L, TEST_TAG) }
+        (kinds + "wheel").forEachIndexed { i, k -> enqueue(wm, k, 5_000L + i * 3_000L, TEST_TAG, test = true) }
     }
 
-    private fun enqueue(wm: WorkManager, kind: String, delayMs: Long, tag: String = TAG) {
+    private fun enqueue(wm: WorkManager, kind: String, delayMs: Long, tag: String = TAG, test: Boolean = false) {
         val req = OneTimeWorkRequestBuilder<ReminderWorker>()
             .setInitialDelay(delayMs.coerceAtLeast(0), TimeUnit.MILLISECONDS)
-            .setInputData(workDataOf(KEY_KIND to kind))
+            .setInputData(workDataOf(KEY_KIND to kind, KEY_TEST to test))
             .addTag(tag)
             .build()
         wm.enqueueUniqueWork("$tag-$kind", ExistingWorkPolicy.REPLACE, req)
@@ -72,14 +76,15 @@ object Reminders {
         return c.timeInMillis
     }
 
-    internal fun post(ctx: Context, kind: String) {
+    /** [test] shows the daily gift text even when nothing is claimable (debug "Test reminders" only). */
+    internal fun post(ctx: Context, kind: String, test: Boolean = false) {
         val s = SaveRepository.peek(ctx) ?: SaveData()
         if (!s.settings.notifications) return
         val level = s.progress.highestUnlocked
         val today = TimeUtil.today()
         val (title, body, icon) = when (kind) {
             "daily" -> when {
-                GameRules.loginClaimable(s, today) -> Triple(
+                test || GameRules.loginClaimable(s, today) -> Triple(
                     ctx.getString(R.string.notif_daily_title),
                     ctx.getString(R.string.notif_daily_body, (s.rewards.loginIndex % 7) + 1),
                     R.drawable.ui_gift,
@@ -87,17 +92,18 @@ object Reminders {
                 GameRules.wheelFree(s, today) -> Triple(ctx.getString(R.string.notif_wheel_title), ctx.getString(R.string.notif_wheel_body), R.drawable.ui_wheel)
                 else -> return // nothing is actually waiting: say nothing rather than something untrue
             }
+            "wheel" -> Triple(ctx.getString(R.string.notif_wheel_title), ctx.getString(R.string.notif_wheel_body), R.drawable.ui_wheel)
             "comeback3" -> Triple(ctx.getString(R.string.notif_back3_title), ctx.getString(R.string.notif_back3_body, level), R.drawable.ui_snowball)
             else -> Triple(ctx.getString(R.string.notif_back7_title), ctx.getString(R.string.notif_back7_body, level), R.drawable.ui_trophy)
         }
-        val screen = if (kind == "daily") "rewards" else "home"
-        Notifications.show(ctx, 100 + kinds.indexOf(kind).coerceAtLeast(0), Notifications.CH_REMINDERS, title, body, "reminder_$kind", screen, icon)
+        val screen = if (kind == "daily" || kind == "wheel") "rewards" else "home"
+        Notifications.show(ctx, 100 + (kinds + "wheel").indexOf(kind).coerceAtLeast(0), Notifications.CH_REMINDERS, title, body, "reminder_$kind", screen, icon)
     }
 }
 
 class ReminderWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
     override fun doWork(): Result {
-        Reminders.post(applicationContext, inputData.getString("kind") ?: "daily")
+        Reminders.post(applicationContext, inputData.getString("kind") ?: "daily", inputData.getBoolean("test", false))
         return Result.success()
     }
 }

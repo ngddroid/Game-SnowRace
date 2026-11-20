@@ -13,9 +13,9 @@ import com.ngstudio.snowrace.game.RaceResult
  * Firebase Analytics + Crashlytics behind one switch: the "Share usage & crash data" setting.
  *
  * - Without app/google-services.json (see app/build.gradle.kts) Firebase isn't initialised and every call here is a no-op.
- * - Debug builds don't send anything unless `adb shell setprop debug.snowrace.firebase 1` is set (then restart the app),
- *   so testing never pollutes the real dashboards. Combine with `adb shell setprop debug.firebase.analytics.app
- *   com.ngstudio.snowrace` to watch events live in the Firebase DebugView.
+ * - Debug builds send too, so crashes and events can be tested from Android Studio. To watch events live in the
+ *   Firebase DebugView: `adb shell setprop debug.firebase.analytics.app com.ngstudio.frostyroll`, then restart the app
+ *   (`.none.` turns it off again). Filter debug devices out of reports with the "Debug" stream or a test device list.
  * - No advertising ID, no user ID, no nickname: events only carry game facts (level, rank, item ids).
  */
 object Telemetry {
@@ -46,7 +46,7 @@ object Telemetry {
 
     fun setConsent(on: Boolean) {
         val a = analytics ?: return
-        val send = on && (!BuildConfig.DEBUG || debugOptIn())
+        val send = on
         active = send
         a.setAnalyticsCollectionEnabled(send)
         // Consent mode: analytics storage follows the setting; nothing ad-related until an ad SDK (and its consent form) exists.
@@ -65,11 +65,6 @@ object Telemetry {
         }
     }
 
-    @android.annotation.SuppressLint("PrivateApi") // debug builds only
-    private fun debugOptIn(): Boolean = try {
-        Class.forName("android.os.SystemProperties").getMethod("get", String::class.java, String::class.java)
-            .invoke(null, "debug.snowrace.firebase", "0") == "1"
-    } catch (_: Throwable) { false }
 
     /** "Reset progress": forget this installation's analytics ID so new data can't be linked to the old. */
     fun resetIdentity() { analytics?.resetAnalyticsData() }

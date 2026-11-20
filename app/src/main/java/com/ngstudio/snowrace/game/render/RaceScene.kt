@@ -60,13 +60,15 @@ class RaceScene(
     private val rng = Rng(spec.seed xor 0x1234L)
     private val halfW = course.halfW
     private val accent = spec.biome.accent
+    /** Christmas season (see [Holiday]): decorated trees, lights, presents and red/green/gold colours. */
+    private val xmas = Holiday.christmas()
 
     // ---- static batches
     private val platform: InstanceBatch
     private val pines = res.prop("pine")
     private val rocks = res.prop("rock")
     private val crystals = res.prop("crystal")
-    private val snowmen = res.prop("snowman")
+    private val snowmen = res.prop(if (xmas) "xmas.snowman" else "snowman")
     private val lanterns = res.prop("lantern")
     private val candies = res.prop("candy")
     private val crates = res.prop("crate")
@@ -97,6 +99,9 @@ class RaceScene(
     /** Start banner: dynamic so it can lift out of the follow camera's view when the race starts. */
     private val gate = res.custom("race.gate") { Props.roundedBox() }
     private val dynamicBatches: List<InstanceBatch>
+    private val decor = if (xmas) ChristmasDecor(res, res.tier == QualityTier.LOW) else null
+    /** Own random stream for decorations, so the Christmas extras don't reshuffle the rest of the layout. */
+    private val xr = Rng(spec.seed xor 0x5A17AL)
 
     private val floeData = ArrayList<FloatArray>() // x, z, scale, yaw, phase
     private val clouds = ArrayList<FloatArray>()   // x, y, z, size
@@ -235,7 +240,8 @@ class RaceScene(
         for (sx in listOf(-1f, 1f)) Inst.add(towers, sx * (halfW + 0.35f), 0f, gateZ, sx = 0.85f, sy = 0.95f, sz = 0.85f)
         for (sx in listOf(-1f, 1f)) Inst.add(towers, sx * (halfW + 0.45f), course.finishY, course.finishLineZ)
         Inst.add(boxes, 0f, course.finishY + 3.55f, course.finishLineZ, sx = halfW * 2f + 1.4f, sy = 0.9f, sz = 0.3f, color = accent, gloss = 0.3f)
-        val balloonColors = intArrayOf(0xFF4D8D, 0x3DF5C8, 0xFFC83D, 0x5EC8FF, 0xB46CFF)
+        val balloonColors = if (xmas) ChristmasDecor.PALETTE else intArrayOf(0xFF4D8D, 0x3DF5C8, 0xFFC83D, 0x5EC8FF, 0xB46CFF)
+        val canopy = if (xmas) XmasProps.RED else accent
         for (i in 0 until 10) {
             val sx = if (i % 2 == 0) -1f else 1f
             Inst.add(balloons, sx * (halfW + rng.range(0.6f, 1.6f)), course.finishY + rng.range(2.4f, 4.4f), course.finishLineZ + rng.range(-1.2f, 1.2f),
@@ -253,7 +259,7 @@ class RaceScene(
             var k3 = 0
             while (cz < standZ1 - 0.2f) {
                 Inst.add(boxes, side * (standOuter - 0.95f), course.finishY + 3.05f, cz, roll = side * 0.16f,
-                    sx = 1.95f, sy = 0.12f, sz = 1.0f, color = if (k3 % 2 == 0) accent else 0xFFFFFF, gloss = 0.3f)
+                    sx = 1.95f, sy = 0.12f, sz = 1.0f, color = if (k3 % 2 == 0) canopy else 0xFFFFFF, gloss = 0.3f)
                 cz += 1.0f; k3++
             }
             var pz = standZ0 + 0.8f
@@ -289,8 +295,10 @@ class RaceScene(
                 for (t in 0 until n) {
                     val a = rng.range(0f, TAU); val d = rng.range(0f, s * 0.45f)
                     val ts = rng.range(0.9f, 1.6f)
-                    Inst.add(pines, ix + cos(a) * d, top - 0.2f, iz + sin(a) * d, yaw = a, sx = ts, sy = ts, sz = ts, sway = 1f)
+                    if (decor != null && t == 0 && xr.chance(0.6f)) decor.tree(ix + cos(a) * d, top - 0.2f, iz + sin(a) * d, ts * 0.95f, xr.range(0f, TAU))
+                    else Inst.add(pines, ix + cos(a) * d, top - 0.2f, iz + sin(a) * d, yaw = a, sx = ts, sy = ts, sz = ts, sway = 1f)
                 }
+                if (decor != null && xr.chance(0.3f)) decor.gifts(ix - sx * s * 0.25f, top - 0.15f, iz + xr.range(-1f, 1f), xr.range(0.7f, 1f), xr.range(0f, TAU))
                 if (s > 4.2f && rng.chance(0.35f)) Inst.add(cabins, ix, top - 0.15f, iz, yaw = if (sx > 0) -PI_F / 2 else PI_F / 2, sx = 0.8f, sy = 0.8f, sz = 0.8f)
                 else if (rng.chance(0.3f)) Inst.add(snowmen, ix + rng.range(-1f, 1f), top - 0.1f, iz, yaw = if (sx > 0) -PI_F / 2 else PI_F / 2)
                 if (spec.time != TimeOfDay.DAY && rng.chance(0.4f)) Inst.add(lanterns, ix - sx * s * 0.3f, top - 0.1f, iz)
@@ -342,7 +350,7 @@ class RaceScene(
             iciclesAlong(g.z0, course.fields[gi].y0, 1f)
             iciclesAlong(g.z1, g.y1, -1f)
         }
-        val markerCols = intArrayOf(accent, 0xFFFFFF)
+        val markerCols = intArrayOf(if (xmas) XmasProps.RED else accent, 0xFFFFFF)
         for (f in course.fields) {
             var mz = f.z0 + 1.2f
             var k2 = 0
@@ -351,8 +359,11 @@ class RaceScene(
                 mz += 3.2f; k2++
             }
         }
-        staticBatches = listOf(platform, pines, rocks, crystals, snowmen, lanterns, candies, crates, barrels, cabins, mountains, islands, towers, flags, balloons, boxes, icicles, markers)
-        dynamicBatches = listOf(floes, blocks, logs, plows, penguins, bumpers, vents, gifts, quads, bigSnow, gate, steps)
+        decor?.let { placeChristmas(it) }
+        staticBatches = listOf(platform, pines, rocks, crystals, snowmen, lanterns, candies, crates, barrels, cabins, mountains, islands, towers, flags, balloons, boxes, icicles, markers) +
+            (decor?.staticBatches ?: emptyList())
+        dynamicBatches = listOf(floes, blocks, logs, plows, penguins, bumpers, vents, gifts, quads, bigSnow, gate, steps) +
+            (decor?.dynamicBatches ?: emptyList())
 
         // ---------------- terrain, water, land mask
         terrains = sim.fields.map { TerrainMesh(it) }
@@ -847,8 +858,38 @@ class RaceScene(
         Prof.tick()
     }
 
+    /** Christmas extras: string lights along both track edges, tree islands at the start and finish, wreaths, presents, a star. */
+    private fun placeChristmas(d: ChristmasDecor) {
+        for (sx in SIDES) {
+            val x = sx * (halfW + 0.05f)
+            d.lightRow(x, 0.2f, course.start.z0 + 0.4f, course.start.z1 - 0.4f)
+            for (f in course.fields) d.lightRow(x, f.y0 + 0.2f, f.z0 + 0.4f, f.z1 - 0.4f)
+            d.lightRow(x, course.finishY + 0.2f, course.finish.z0 + 0.4f, course.finish.z1 - 0.4f)
+        }
+        // a big decorated tree on its own island on each side of the start and of the finish line
+        for (sx in SIDES) for (fz in floatArrayOf(course.start.z0 + 4f, course.finishLineZ - 2f)) {
+            val s = 3.4f
+            val ix = sx * (halfW + 4.2f + s * 0.5f)
+            val top = RaceSim.WATER_Y + s * 0.42f
+            Inst.add(islands, ix, RaceSim.WATER_Y - s * 0.3f, fz, yaw = xr.range(0f, TAU), sx = s, sy = s * 0.72f, sz = s * 0.9f)
+            d.tree(ix, top - 0.25f, fz, 2f, xr.range(0f, TAU))
+            d.gifts(ix - sx * 1.3f, top - 0.2f, fz - 1.1f, 0.9f, xr.range(-0.6f, 0.6f))
+        }
+        // wreaths on the start and finish towers, facing the racers
+        for (sx in SIDES) {
+            d.wreath(sx * (halfW + 0.35f), 2.0f, -0.35f - 0.6f, 0.32f)
+            d.wreath(sx * (halfW + 0.45f), course.finishY + 2.0f, course.finishLineZ - 0.6f, 0.34f)
+        }
+        // presents at the ends of the grandstands and a big star over the finish banner
+        for (side in SIDES) for (bz in floatArrayOf(standZ0 + 0.35f, standZ1 - 0.35f)) {
+            d.gifts(side * (standOuter - 0.55f), course.finishY + 0.22f + 2 * STAND_TIER_RISE, bz, 0.55f, xr.range(0f, TAU))
+        }
+        d.bigStar(0f, course.finishY + 4.8f, course.finishLineZ, 1.5f)
+    }
+
     private fun fillDynamic() {
         val t = time
+        decor?.fill(t, cam.z)
         // finale steps: muted until Pip reaches them, then lit with a flash and a soft pulse
         for (k in 1..Course.STEPS) {
             val top = course.finishY + k * Course.STEP_RISE

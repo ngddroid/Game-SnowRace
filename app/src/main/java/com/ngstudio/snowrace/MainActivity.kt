@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
         if (BuildConfig.DEBUG) {
             com.ngstudio.snowrace.ui.screens.LaunchOptions.autoLevel = intent.getIntExtra("autoLevel", 0)
             com.ngstudio.snowrace.ui.screens.LaunchOptions.autopilot = intent.getBooleanExtra("autopilot", false)
+            if (intent.hasExtra("xmas")) com.ngstudio.snowrace.game.render.Holiday.force = intent.getBooleanExtra("xmas", true)
         }
         val settings = c.save.data.settings
         val renderer = GameRenderer(applicationContext, c.audio, c.haptics, settings.quality)

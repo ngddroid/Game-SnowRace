@@ -9,9 +9,9 @@ enum class Rarity(val label: String, val color: Long) {
     LEGENDARY("Legendary", 0xFFFFC83D),
 }
 
-enum class Hat { BEANIE, TOPHAT, CROWN, CHEF, PIRATE, HELMET, HEADBAND, EARMUFFS, NONE }
+enum class Hat { BEANIE, TOPHAT, CROWN, CHEF, PIRATE, HELMET, HEADBAND, EARMUFFS, SANTA, NONE }
 enum class Ears { NONE, ROUND, POINTY, TUFT }
-enum class Extra { BEAK, ANTLERS, HORNS, UNICORN_HORN, CARROT_NOSE, EYE_PATCH, ANTENNA, PANDA_PATCHES, TAIL, CAPE, MANE, WHISKERS, FLUFF }
+enum class Extra { BEAK, ANTLERS, HORNS, UNICORN_HORN, CARROT_NOSE, EYE_PATCH, ANTENNA, PANDA_PATCHES, TAIL, CAPE, MANE, WHISKERS, FLUFF, BEARD, BELT }
 
 enum class PriceType { FREE, COINS, GEMS, REWARD }
 
@@ -77,7 +77,8 @@ object Catalog {
     val characters: List<CharacterDef> = listOf(
         CharacterDef("pip", "Pip", Rarity.COMMON, Price.FREE, c(0xFFFF7A45), c(0xFFFFD2B8)),
         CharacterDef("bubbles", "Bubbles", Rarity.COMMON, Price.coins(600), c(0xFF5EC8FF), c(0xFFD9F3FF), hatColor = c(0xFFFFC83D), pompom = c(0xFFFF4D8D), scarf = c(0xFFFF5A5A), mitten = c(0xFFFFC83D)),
-        CharacterDef("mochi", "Mochi", Rarity.COMMON, Price.coins(600), c(0xFFFFB3CF), c(0xFFFFF0F5), hatColor = c(0xFFFF4D8D), pompom = c(0xFFFFFFFF), scarf = c(0xFF8A7CFF), mitten = c(0xFFFF4D8D)),
+        // id stays "mochi" so existing saves and level rival lists keep working
+        CharacterDef("mochi", "Lil' Santa", Rarity.COMMON, Price.coins(600), c(0xFFD9263A), c(0xFFFFFFFF), hat = Hat.SANTA, hatColor = c(0xFFD9263A), hatTrim = c(0xFFFFFFFF), pompom = c(0xFFFFFFFF), scarf = c(0xFFFFFFFF), scarfStripe = c(0xFFFFFFFF), mitten = c(0xFFFFFFFF), boots = c(0xFF1E1E26), extras = setOf(Extra.BEARD, Extra.BELT), extraColor = c(0xFFFFFFFF)),
         CharacterDef("minty", "Minty", Rarity.COMMON, Price.coins(600), c(0xFF4FE3B5), c(0xFFD8FFF1), hatColor = c(0xFF7B5CFF), pompom = c(0xFFFFC83D), scarf = c(0xFF7B5CFF), mitten = c(0xFF7B5CFF)),
         CharacterDef("sunny", "Sunny", Rarity.COMMON, Price.coins(700), c(0xFFFFD34D), c(0xFFFFF4C9), hatColor = c(0xFFFF7A45), pompom = c(0xFFFFFFFF), scarf = c(0xFF3DB2FF), mitten = c(0xFFFF7A45)),
         CharacterDef("grape", "Grape", Rarity.COMMON, Price.coins(700), c(0xFF9A6BFF), c(0xFFE6DBFF), hatColor = c(0xFF3DF5C8), pompom = c(0xFFFFC83D), scarf = c(0xFFFFC83D), mitten = c(0xFF3DF5C8)),

@@ -18,7 +18,7 @@
 
 @font-face {
   font-family: 'Lilita';
-  src: url('../fonts/LilitaOne-Regular.ttf') format('truetype');
+  src: url('LilitaOne-Regular.ttf') format('truetype');
   font-weight: 400;
   font-style: normal;
   font-display: block;
@@ -601,6 +601,31 @@ a:focus-visible {
 
 .foot p {
   margin: 0 0 10px;
+}
+
+/* "Powered by NG Studio" sign-off under the footer (same block as the other NG Studio games) */
+.powered {
+  margin: 22px 0 28px;
+  text-align: center;
+}
+
+.powered-label {
+  display: block;
+  margin-bottom: 10px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--indigo);
+}
+
+.powered-logo {
+  display: block;
+  margin: 0 auto;
+  width: 112px;
+  height: 112px;
+  border-radius: 26px;
+  box-shadow: 0 4px 0 rgba(46, 42, 122, 0.18), 0 10px 22px rgba(30, 27, 75, 0.22);
 }
 
 .flake {

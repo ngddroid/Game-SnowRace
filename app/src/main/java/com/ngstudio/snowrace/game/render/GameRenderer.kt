@@ -190,7 +190,6 @@ class GameRenderer(
         frames++
         if (now - fpsClock > 1_000_000_000L) {
             _fps.value = frames
-            (spec as? SceneSpec.Race)?.controller?.fps = frames
             if (perfLog) Log.i(
                 "FrostyFps",
                 "#${fpsSeq++} fps=$frames jank=$jank/$jankScene worst=${worstFrameNs / 1_000_000}ms cmd=${worstCmdNs / 1_000_000}ms upd=${worstUpdNs / 100_000 / 10f}ms ren=${worstRenNs / 100_000 / 10f}ms scene=${s.javaClass.simpleName}",

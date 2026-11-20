@@ -189,6 +189,8 @@ class App : Application() {
         Telemetry.init(this, s.shareData)
         Notifications.createChannels(this)
         Push.setEnabled(s.notifications, changed = false)
+        // debug builds print the push token at start (logcat tag "Push") for Firebase's "Send test message"
+        if (com.ngstudio.snowrace.BuildConfig.DEBUG && s.notifications) Push.logToken()
     }
 }
 

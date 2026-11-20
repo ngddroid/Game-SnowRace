@@ -32,7 +32,6 @@ data class HudState(
     val finaleStep: Int = 0,
     val multiplier: Float = 1f,
     val giftCoins: Int = 0,
-    val fps: Int = 0,
 )
 
 enum class PopupKind { GOOD, BAD, COIN, INFO, BIG }
@@ -77,7 +76,6 @@ class RaceController(val spec: LevelSpec, val setup: PlayerSetup) {
     /** Joystick vector in screen space: x right, y up, magnitude 0..1 (already sensitivity scaled). */
     @Volatile var stickX = 0f
     @Volatile var stickY = 0f
-    @Volatile var fps = 0
 
     private var lastDirX = 0f
     private var lastDirZ = 1f
@@ -158,7 +156,6 @@ class RaceController(val spec: LevelSpec, val setup: PlayerSetup) {
             finaleStep = p.finaleStep,
             multiplier = sim.multiplier(),
             giftCoins = p.giftCoins,
-            fps = fps,
         )
     }
 

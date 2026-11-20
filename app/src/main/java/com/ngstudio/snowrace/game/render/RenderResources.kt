@@ -70,6 +70,8 @@ class RenderResources(val context: Context, val tier: QualityTier) {
         "icicle" -> Props.icicle(); "marker" -> Props.marker(); "floe" -> Props.iceFloe(); "block" -> Props.block()
         "log" -> Props.log(); "plow" -> Props.plow(); "penguin" -> Props.penguin(); "bumper" -> Props.bumper()
         "vent" -> Props.steamVent(); "gift" -> Props.gift(); "quad" -> Props.quad(); "bigsnow" -> Props.sphere(14)
+        "xmas.tree" -> XmasProps.tree(); "xmas.star" -> XmasProps.star(); "xmas.bulb" -> XmasProps.bulb()
+        "xmas.wreath" -> XmasProps.wreath(); "xmas.gifts" -> XmasProps.giftPile(); "xmas.snowman" -> XmasProps.santaSnowman()
         else -> error("unknown prop $key")
     }
 
@@ -80,6 +82,7 @@ class RenderResources(val context: Context, val tier: QualityTier) {
             "flag", "balloon", "step", "box", "icicle", "marker", "floe", "block", "log", "plow", "penguin", "bumper", "vent",
             "gift", "quad", "bigsnow",
         )) prop(k)
+        if (Holiday.christmas()) for (k in listOf("xmas.tree", "xmas.star", "xmas.bulb", "xmas.wreath", "xmas.gifts", "xmas.snowman")) prop(k)
     }
 
     init {

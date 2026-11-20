@@ -120,8 +120,6 @@ fun SettingsScreen(activity: Activity) {
                         value = s.sensitivity, onValueChange = { v -> set { it.copy(sensitivity = v) } }, valueRange = 0.6f..1.6f,
                         colors = SliderDefaults.colors(thumbColor = Palette.Berry, activeTrackColor = Palette.Berry, inactiveTrackColor = Palette.PanelEdge),
                     )
-                    ToggleRow(R.drawable.ui_hand, "Left-handed HUD", s.leftHanded) { v -> set { it.copy(leftHanded = v) } }
-                    ToggleRow(R.drawable.ui_info, "Show FPS", s.showFps) { v -> set { it.copy(showFps = v) } }
                     Spacer(Modifier.height(6.dp))
                     GameButton("Replay Tutorial", onClick = {
                         c.save.update { it.copy(profile = it.profile.copy(onboardingDone = false)) }
@@ -179,7 +177,7 @@ fun SettingsScreen(activity: Activity) {
                         GameButton("Autopilot next race", onClick = { nav.showToast("Autopilot armed for the next race"); DebugFlags.autopilot = true }, modifier = Modifier.fillMaxWidth(), height = 44.dp, colors = Buttons.Mint, textStyle = Type.Label)
                         Spacer(Modifier.height(6.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            GameButton("Test reminders", onClick = { Reminders.scheduleTest(activity); nav.showToast("3 reminders in 5-13 s: leave the game") }, modifier = Modifier.weight(1f), height = 44.dp, colors = Buttons.Sky, textStyle = Type.Label)
+                            GameButton("Test reminders", onClick = { Reminders.scheduleTest(activity); nav.showToast("4 reminders in 5-14 s: leave the game") }, modifier = Modifier.weight(1f), height = 44.dp, colors = Buttons.Sky, textStyle = Type.Label)
                             GameButton("Fake update", onClick = { c.updater.simulate(); nav.showToast("Update downloaded: see Home") }, modifier = Modifier.weight(1f), height = 44.dp, colors = Buttons.Gold, textStyle = Type.Label)
                         }
                         Spacer(Modifier.height(6.dp))
@@ -188,7 +186,7 @@ fun SettingsScreen(activity: Activity) {
                             GameButton("Test crash", onClick = { throw RuntimeException("Crashlytics test crash (debug button)") }, modifier = Modifier.weight(1f), height = 44.dp, colors = Buttons.Coral, textStyle = Type.Label)
                         }
                         BodyText(
-                            "Firebase: " + (if (!Telemetry.available) "not configured (add app/google-services.json)" else if (Telemetry.active) "sending" else "configured, not sending (setprop debug.snowrace.firebase 1)"),
+                            "Firebase: " + (if (!Telemetry.available) "not configured (add app/google-services.json)" else if (Telemetry.active) "sending" else "off (Share usage & crash data is off)"),
                             color = Palette.Muted, style = Type.Small,
                         )
                     }

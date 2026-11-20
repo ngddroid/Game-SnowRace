@@ -224,7 +224,7 @@ fun RaceScreen(level: Int, boosters: Set<String>) {
             }
         }
 
-        if (result == null) Hud(hud, ctrl, settings.leftHanded, settings.showFps, onPause = { pause() })
+        if (result == null) Hud(hud, ctrl, onPause = { pause() })
         Tutorial(ctrl.spec.tutorial, hud)
 
         // countdown
@@ -282,15 +282,14 @@ fun RaceScreen(level: Int, boosters: Set<String>) {
 
 // ================================================================================== HUD
 @Composable
-private fun Hud(h: HudState, ctrl: RaceController, leftHanded: Boolean, showFps: Boolean, onPause: () -> Unit) {
+private fun Hud(h: HudState, ctrl: RaceController, onPause: () -> Unit) {
     Column(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 10.dp, vertical = 6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (!leftHanded) PauseButton(onPause)
+            PauseButton(onPause)
             Spacer(Modifier.width(8.dp))
             ProgressTrack(h, Modifier.weight(1f))
             Spacer(Modifier.width(8.dp))
             RankPill(h.rank, h.racers)
-            if (leftHanded) { Spacer(Modifier.width(8.dp)); PauseButton(onPause) }
         }
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -308,7 +307,6 @@ private fun Hud(h: HudState, ctrl: RaceController, leftHanded: Boolean, showFps:
             if (h.shield > 0f) PowerChip(R.drawable.ui_shield, h.shield, 8f)
             if (h.magnet > 0f) PowerChip(R.drawable.ui_magnet, h.magnet, 7f)
         }
-        if (showFps) BodyText("${h.fps} fps", color = Color.White, style = Type.Small)
     }
 }
 

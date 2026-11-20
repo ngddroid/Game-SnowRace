@@ -162,9 +162,23 @@ fun Avatar(characterId: String, size: androidx.compose.ui.unit.Dp) {
                 drawCircle(Color.White, radius = w * 0.02f, center = Offset(w / 2 + sx * w * 0.12f + w * 0.015f, eyeY - w * 0.025f))
                 drawOval(Color(0x88FF8FA8), topLeft = Offset(w / 2 + sx * w * 0.2f - w * 0.05f, w * 0.6f), size = Size(w * 0.1f, w * 0.06f))
             }
+            if (com.ngstudio.snowrace.data.Extra.BEARD in def.extras) {
+                val beard = Color(0xFF000000 or def.extraColor.toLong())
+                drawOval(beard, topLeft = Offset(w * 0.27f, w * 0.64f), size = Size(w * 0.46f, w * 0.26f))
+                for (sx in listOf(-1f, 1f)) drawOval(beard, topLeft = Offset(w / 2 + sx * w * 0.07f - w * 0.075f, w * 0.6f), size = Size(w * 0.15f, w * 0.06f))
+            }
             drawOval(Color(0xFF6B1E3A), topLeft = Offset(w * 0.46f, w * 0.66f), size = Size(w * 0.08f, w * 0.045f))
             // hat (beanie / other hats share the hat colour)
-            if (def.hat != com.ngstudio.snowrace.data.Hat.NONE) {
+            if (def.hat == com.ngstudio.snowrace.data.Hat.SANTA) {
+                val red = Color(0xFF000000 or def.hatColor.toLong())
+                val tip = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(w * 0.3f, w * 0.14f); lineTo(w * 0.86f, w * 0.06f); lineTo(w * 0.78f, w * 0.3f); close()
+                }
+                drawOval(red, topLeft = Offset(w * 0.16f, w * 0.04f), size = Size(w * 0.68f, w * 0.4f))
+                drawPath(tip, red)
+                drawRoundRect(Color(0xFF000000 or def.hatTrim.toLong()), topLeft = Offset(w * 0.15f, w * 0.29f), size = Size(w * 0.7f, w * 0.13f), cornerRadius = CornerRadius(w * 0.065f))
+                drawCircle(Color(0xFF000000 or def.pompom.toLong()), radius = w * 0.07f, center = Offset(w * 0.86f, w * 0.08f))
+            } else if (def.hat != com.ngstudio.snowrace.data.Hat.NONE) {
                 drawOval(Color(0xFF000000 or def.hatColor.toLong()), topLeft = Offset(w * 0.16f, w * 0.02f), size = Size(w * 0.68f, w * 0.42f))
                 drawRoundRect(Color(0xFF000000 or def.hatTrim.toLong()), topLeft = Offset(w * 0.17f, w * 0.3f), size = Size(w * 0.66f, w * 0.1f), cornerRadius = CornerRadius(w * 0.05f))
             } else if (def.ears != com.ngstudio.snowrace.data.Ears.NONE) {
@@ -277,7 +291,6 @@ fun HomeTab(save: SaveData) {
             )
             Spacer(Modifier.height(98.dp))
         }
-        NotificationAsk(save)
     }
 }
 

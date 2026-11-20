@@ -1,8 +1,13 @@
 package com.ngstudio.snowrace.ui.screens
 
+import android.content.Context
 import android.content.Intent
+import android.webkit.WebResourceResponse
+import android.webkit.WebResourceError
+import android.os.Build
+import android.net.NetworkCapabilities
+import android.net.ConnectivityManager
 import android.net.Uri
-import android.text.TextUtils
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -61,14 +66,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.ngstudio.snowrace.BuildConfig
 import com.ngstudio.snowrace.R
 import com.ngstudio.snowrace.ads.MockAdProvider
 import com.ngstudio.snowrace.audio.Sfx
@@ -316,26 +319,33 @@ private fun StarterPicker(onDone: (String, String) -> Unit) {
 }
 
 // =============================================================================== Legal
-enum class LegalDoc(val file: String, val title: String) { TERMS("terms.html", "Terms of Service"), PRIVACY("privacy.html", "Privacy Policy") }
+/**
+ * Privacy policy and terms. They open from the website first (so a text fix there reaches every player without an
+ * app update) and fall back to the copy in assets/legal/ when the device is offline, the site errors or is slow.
+ * assets/legal/ is also exactly what is hosted: upload that folder to update the website.
+ */
+enum class LegalDoc(val file: String, val title: String) { TERMS("terms_conditions.html", "Terms of Service"), PRIVACY("privacy_policy.html", "Privacy Policy") }
+
+private const val LEGAL_SITE = "https://game-sonwrace3d.web.app/"
+private const val LEGAL_ASSETS = "file:///android_asset/legal/"
+/** Give up on the website after this long and show the bundled copy. */
+private const val LEGAL_TIMEOUT_MS = 5_000L
+
+private fun isOnline(ctx: Context): Boolean {
+    val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+    if (Build.VERSION.SDK_INT >= 23) {
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork ?: return false) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+    @Suppress("DEPRECATION")
+    return cm.activeNetworkInfo?.isConnected == true
+}
 
 @Composable
 fun LegalScreen(doc: LegalDoc) {
     val c = LocalContainer.current
     val nav = LocalNav.current
-    val ctx = LocalContext.current
-    val appName = stringResource(R.string.app_name)
-    val studio = stringResource(R.string.legal_studio_name)
-    val email = stringResource(R.string.legal_contact_email)
-    val effective = stringResource(R.string.legal_effective_date)
-    val html = remember(doc, appName, studio, email, effective) {
-        val raw = ctx.assets.open("legal/${doc.file}").bufferedReader(Charsets.UTF_8).use { it.readText() }
-        fun esc(s: String) = TextUtils.htmlEncode(s)
-        raw.replace("{{APP_NAME}}", esc(appName))
-            .replace("{{STUDIO_NAME}}", esc(studio))
-            .replace("{{CONTACT_EMAIL}}", esc(email))
-            .replace("{{EFFECTIVE_DATE}}", esc(effective))
-            .replace("{{APP_VERSION}}", esc(BuildConfig.VERSION_NAME))
-    }
+    var loading by remember(doc) { mutableStateOf(true) }
     Column(Modifier.fillMaxSize().background(Palette.bgGradient)) {
         Row(
             Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp),
@@ -355,25 +365,81 @@ fun LegalScreen(doc: LegalDoc) {
                 factory = { context ->
                     WebView(context).apply {
                         settings.javaScriptEnabled = false
-                        settings.allowFileAccess = true
+                        settings.allowFileAccess = false // file:///android_asset stays readable without it
                         settings.allowContentAccess = false
-                        settings.blockNetworkLoads = true
                         setBackgroundColor(android.graphics.Color.parseColor("#DFF6FF"))
+                        val online = LEGAL_SITE + doc.file
+                        val local = LEGAL_ASSETS + doc.file
+                        var usingLocal = false
+                        var settled = false
+                        fun fallBack(view: WebView) {
+                            if (usingLocal) return
+                            android.util.Log.i("Legal", "website unavailable, using the bundled copy")
+                            usingLocal = true
+                            settled = true
+                            view.stopLoading()
+                            view.loadUrl(local)
+                        }
                         webViewClient = object : WebViewClient() {
                             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                                 val url = request.url
-                                if (url.scheme == "mailto") {
-                                    try { context.startActivity(Intent(Intent.ACTION_SENDTO, url)) } catch (_: Throwable) { }
-                                    return true
+                                val s = url.toString()
+                                return when {
+                                    url.scheme == "mailto" || url.scheme == "tel" -> {
+                                        val action = if (url.scheme == "mailto") Intent.ACTION_SENDTO else Intent.ACTION_DIAL
+                                        try { context.startActivity(Intent(action, url)) } catch (_: Throwable) { }
+                                        true
+                                    }
+                                    s.startsWith(LEGAL_SITE) || s.startsWith(LEGAL_ASSETS) -> false // our own pages stay in here
+                                    url.scheme == "http" || url.scheme == "https" -> {
+                                        try { context.startActivity(Intent(Intent.ACTION_VIEW, url)) } catch (_: Throwable) { }
+                                        true
+                                    }
+                                    else -> true
                                 }
-                                return url.scheme != "file"
+                            }
+
+                            override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+                                if (request.isForMainFrame) fallBack(view)
+                            }
+
+                            override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) {
+                                if (request.isForMainFrame && errorResponse.statusCode >= 400) fallBack(view)
+                            }
+
+                            override fun onPageFinished(view: WebView, url: String) {
+                                val final = url.startsWith(LEGAL_ASSETS) || (url.startsWith(LEGAL_SITE) && !usingLocal)
+                                if (!final) return // the failed website page finishing before the fallback loads
+                                settled = true
+                                loading = false
+                                android.util.Log.i("Legal", "showing ${if (usingLocal) "bundled" else "website"} copy: $url")
                             }
                         }
-                        loadDataWithBaseURL("file:///android_asset/legal/", html, "text/html", "UTF-8", null)
+                        if (isOnline(context)) {
+                            loadUrl(online)
+                            postDelayed({ if (!settled) fallBack(this) }, LEGAL_TIMEOUT_MS)
+                        } else {
+                            usingLocal = true
+                            loadUrl(local)
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
             )
+            if (loading) {
+                // shown while the website (or, if it fails, the bundled copy) loads
+                val spin = rememberInfiniteTransition(label = "legalSpin")
+                val angle by spin.animateFloat(0f, 360f, infiniteRepeatable(tween(1400)), label = "a")
+                Column(
+                    Modifier.fillMaxSize().background(Color(0xFFDFF6FF)),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    UiIcon(R.drawable.ui_snowflake, 56.dp, Modifier.graphicsLayer { rotationZ = angle })
+                    Spacer(Modifier.height(10.dp))
+                    BodyText("Loading…", color = Palette.Muted, style = Type.Label)
+                }
+            }
         }
     }
     LaunchedEffect(Unit) { c.audio.play(Sfx.UI_OPEN) }

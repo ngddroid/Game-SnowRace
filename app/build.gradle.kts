@@ -7,26 +7,37 @@ plugins {
 // Firebase (Analytics, Crashlytics, Cloud Messaging) reads its project keys from app/google-services.json,
 // downloaded from the Firebase console for this applicationId. Without the file the game still builds and
 // runs: every Firebase feature simply stays off (see analytics/Telemetry.kt).
-val hasFirebaseConfig = file("google-services.json").exists()
+val appId = "com.ngstudio.frostyroll"
+val firebaseConfig = file("google-services.json")
+// The file must contain a Firebase app registered for this exact package name; a file made for another package
+// would fail the build ("No matching client found"), so it is skipped with a warning instead.
+val hasFirebaseConfig = firebaseConfig.exists() &&
+    Regex("\"package_name\"\\s*:\\s*\"${Regex.escape(appId)}\"").containsMatchIn(firebaseConfig.readText())
 if (hasFirebaseConfig) {
     apply(plugin = libs.plugins.google.services.get().pluginId)
     apply(plugin = libs.plugins.firebase.crashlytics.get().pluginId)
+} else if (firebaseConfig.exists()) {
+    logger.warn(
+        "app/google-services.json has no Firebase app for package '$appId': building WITHOUT Firebase. " +
+            "In the Firebase console add an Android app with package '$appId' and download its google-services.json."
+    )
 } else {
     logger.warn("app/google-services.json is missing: building without Firebase (analytics, crash reports and push are off).")
 }
 
 android {
+    // Internal code package (R / BuildConfig). The store / Firebase package name is applicationId below.
     namespace = "com.ngstudio.snowrace"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.ngstudio.snowrace"
+        applicationId = appId
         minSdk = 24
         targetSdk = 37
         versionCode = 1
-        versionName = "1.0.0"
+        versionName = "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "FIREBASE_CONFIGURED", hasFirebaseConfig.toString())
